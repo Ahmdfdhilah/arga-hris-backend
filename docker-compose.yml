@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  hris-db:
+    image: postgres:15-alpine
+    container_name: hris-postgres
+    environment:
+      POSTGRES_USER: hris_user
+      POSTGRES_PASSWORD: hris_password
+      POSTGRES_DB: hris_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - hris_postgres_data:/var/lib/postgresql/data
+    networks:
+      - hris-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hris_user -d hris_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  hris-redis:
+    image: redis:7-alpine
+    container_name: hris-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - hris_redis_data:/data
+    networks:
+      - hris-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  hris-service:
+    build: .
+    container_name: hris-service
+    environment:
+      APP_NAME: HRIS Service
+      APP_VERSION: 1.0.0
+      DEBUG: "True"
+      API_PREFIX: /api/v1
+
+      POSTGRES_SERVER: hris-db
+      POSTGRES_USER: hris_user
+      POSTGRES_PASSWORD: hris_password
+      POSTGRES_DB: hris_db
+      POSTGRES_PORT: 5432
+
+      REDIS_HOST: hris-redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+      REDIS_DB: 0
+
+      SECRET_KEY: your-secret-key-change-in-production
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+
+      WORKFORCE_GRPC_HOST: host.docker.internal
+      WORKFORCE_GRPC_PORT: 50051
+
+      CORS_ORIGINS: "*"
+    ports:
+      - "8002:8000"
+    depends_on:
+      hris-db:
+        condition: service_healthy
+      hris-redis:
+        condition: service_healthy
+    networks:
+      - hris-network
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+volumes:
+  hris_postgres_data:
+  hris_redis_data:
+
+networks:
+  hris-network:
+    driver: bridge

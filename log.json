@@ -1,0 +1,14 @@
+{
+  "error": false,
+  "message": "Bulk insert completed: 5 sukses, 25 error",
+  "timestamp": "2025-12-04T07:01:27.619629Z",
+  "data": {
+    "total_items": 30,
+    "success_count": 5,
+    "error_count": 25,
+    "errors": [
+      {
+        "row_number": 2,
+        "number": "IT-001",
+        "error": "Conflict: SSO ID 40 sudah ter-link ke user lain dengan employee_id=39. Tidak bisa link ke employee_id=47. Kemungkinan email richardnarta.arga@gmail.com sudah digunakan oleh employee lain."
+      }]}}

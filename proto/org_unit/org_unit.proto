@@ -1,0 +1,177 @@
+syntax = "proto3";
+
+package org_unit;
+
+option go_package = "github.com/ahmdfdhilah/arga-workforce-service/proto/org_unit";
+
+import "google/protobuf/timestamp.proto";
+import "proto/common/common.proto";
+
+service OrgUnitService {
+  rpc GetOrgUnit (GetOrgUnitRequest) returns (OrgUnit);
+  rpc GetOrgUnitByCode (GetOrgUnitByCodeRequest) returns (OrgUnit);
+  rpc ListOrgUnits (ListOrgUnitsRequest) returns (ListOrgUnitsResponse);
+  rpc CreateOrgUnit (CreateOrgUnitRequest) returns (OrgUnit);
+  rpc UpdateOrgUnit (UpdateOrgUnitRequest) returns (OrgUnit);
+  rpc DeleteOrgUnit (DeleteOrgUnitRequest) returns (common.StatusResponse);
+
+  rpc GetOrgUnitChildren (GetOrgUnitChildrenRequest) returns (ListOrgUnitsResponse);
+  rpc GetOrgUnitHierarchy (GetOrgUnitHierarchyRequest) returns (OrgUnitHierarchy);
+  rpc GetOrgUnitAncestors (GetOrgUnitAncestorsRequest) returns (ListOrgUnitsResponse);
+
+  rpc BatchGetOrgUnits (BatchGetOrgUnitsRequest) returns (ListOrgUnitsResponse);
+
+  rpc GetOrgUnitTypes (GetOrgUnitTypesRequest) returns (GetOrgUnitTypesResponse);
+
+  // Soft delete operations
+  rpc SoftDeleteOrgUnit (SoftDeleteOrgUnitRequest) returns (OrgUnit);
+  rpc RestoreOrgUnit (RestoreOrgUnitRequest) returns (OrgUnit);
+  rpc ListDeletedOrgUnits (ListDeletedOrgUnitsRequest) returns (ListOrgUnitsResponse);
+}
+
+message OrgUnit {
+  int32 org_unit_id = 1;
+  string org_unit_code = 2;
+  string org_unit_name = 3;
+  string org_unit_type = 4;
+
+  int32 org_unit_parent_id = 5;
+  OrgUnitInfo parent = 6;
+  int32 org_unit_level = 7;
+  string org_unit_path = 8;
+
+  int32 org_unit_head_id = 9;
+  EmployeeInfo head = 10;
+
+  string org_unit_description = 11;
+
+  map<string, string> org_unit_metadata = 12;
+  bool is_active = 13;
+
+  google.protobuf.Timestamp created_at = 14;
+  google.protobuf.Timestamp updated_at = 15;
+  int32 created_by = 16;
+  int32 updated_by = 17;
+
+  int32 employee_count = 18;
+  int32 total_employee_count = 19;
+
+  // Soft delete fields
+  optional google.protobuf.Timestamp deleted_at = 20;
+  optional int32 deleted_by = 21;
+}
+
+message OrgUnitInfo {
+  int32 org_unit_id = 1;
+  string org_unit_code = 2;
+  string org_unit_name = 3;
+  string org_unit_type = 4;
+}
+
+message EmployeeInfo {
+  int32 employee_id = 1;
+  string employee_number = 2;
+  string employee_name = 3;
+  string employee_position = 4;
+}
+
+message GetOrgUnitRequest {
+  int32 org_unit_id = 1;
+}
+
+message GetOrgUnitByCodeRequest {
+  string org_unit_code = 1;
+}
+
+message ListOrgUnitsRequest {
+  common.Pagination pagination = 1;
+  optional int32 org_unit_parent_id = 2;
+  optional string org_unit_type = 3;
+  optional bool is_active = 4;
+  optional string search = 5;
+}
+
+message ListOrgUnitsResponse {
+  repeated OrgUnit org_units = 1;
+  common.PaginationInfo pagination_info = 2;
+}
+
+message CreateOrgUnitRequest {
+  string org_unit_code = 1;
+  string org_unit_name = 2;
+  string org_unit_type = 3;
+  int32 org_unit_level = 4;
+  string org_unit_path = 5;
+  optional int32 org_unit_parent_id = 6;
+  optional int32 org_unit_head_id = 7;
+  optional string org_unit_description = 8;
+  map<string, string> org_unit_metadata = 9;
+  int32 created_by = 10;
+}
+
+message UpdateOrgUnitRequest {
+  int32 org_unit_id = 1;
+  optional string org_unit_name = 2;
+  optional string org_unit_type = 3;
+  optional int32 org_unit_parent_id = 4;
+  optional int32 org_unit_level = 5;
+  optional string org_unit_path = 6;
+  optional int32 org_unit_head_id = 7;
+  optional string org_unit_description = 8;
+  map<string, string> org_unit_metadata = 9;
+  optional bool is_active = 10;
+  int32 updated_by = 11;
+}
+
+message DeleteOrgUnitRequest {
+  int32 org_unit_id = 1;
+  bool soft_delete = 2;
+  int32 deleted_by = 3;
+}
+
+message GetOrgUnitChildrenRequest {
+  int32 org_unit_parent_id = 1;
+  bool recursive = 2;
+  common.Pagination pagination = 3;
+}
+
+message GetOrgUnitHierarchyRequest {
+  optional int32 root_org_unit_id = 1;
+  int32 max_depth = 2;
+}
+
+message GetOrgUnitAncestorsRequest {
+  int32 org_unit_id = 1;
+}
+
+message BatchGetOrgUnitsRequest {
+  repeated int32 org_unit_ids = 1;
+}
+
+message OrgUnitHierarchy {
+  OrgUnit org_unit = 1;
+  repeated OrgUnitHierarchy children = 2;
+}
+
+message GetOrgUnitTypesRequest {
+  // Empty request
+}
+
+message GetOrgUnitTypesResponse {
+  repeated string types = 1;
+}
+
+// Soft delete operations messages
+message SoftDeleteOrgUnitRequest {
+  int32 org_unit_id = 1;
+  int32 deleted_by_user_id = 2;
+}
+
+message RestoreOrgUnitRequest {
+  int32 org_unit_id = 1;
+}
+
+message ListDeletedOrgUnitsRequest {
+  common.Pagination pagination = 1;
+  optional string search = 2;
+}

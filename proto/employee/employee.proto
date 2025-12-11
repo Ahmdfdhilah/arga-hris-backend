@@ -1,0 +1,162 @@
+syntax = "proto3";
+
+package employee;
+
+option go_package = "github.com/ahmdfdhilah/arga-workforce-service/proto/employee";
+
+import "google/protobuf/timestamp.proto";
+import "proto/common/common.proto";
+
+service EmployeeService {
+  rpc GetEmployee (GetEmployeeRequest) returns (Employee);
+  rpc GetEmployeeByNumber (GetEmployeeByNumberRequest) returns (Employee);
+  rpc GetEmployeeByEmail (GetEmployeeByEmailRequest) returns (Employee);
+  rpc ListEmployees (ListEmployeesRequest) returns (ListEmployeesResponse);
+  rpc CreateEmployee (CreateEmployeeRequest) returns (Employee);
+  rpc UpdateEmployee (UpdateEmployeeRequest) returns (Employee);
+  rpc DeleteEmployee (DeleteEmployeeRequest) returns (common.StatusResponse);
+
+  rpc GetEmployeeSubordinates (GetSubordinatesRequest) returns (ListEmployeesResponse);
+  rpc GetEmployeesByOrgUnit (GetEmployeesByOrgUnitRequest) returns (ListEmployeesResponse);
+
+  rpc BatchGetEmployees (BatchGetEmployeesRequest) returns (ListEmployeesResponse);
+
+  // Soft delete operations
+  rpc SoftDeleteEmployee (SoftDeleteEmployeeRequest) returns (Employee);
+  rpc RestoreEmployee (RestoreEmployeeRequest) returns (Employee);
+  rpc ListDeletedEmployees (ListDeletedEmployeesRequest) returns (ListEmployeesResponse);
+}
+
+message Employee {
+  int32 employee_id = 1;
+  string employee_number = 2;
+  string employee_name = 3;
+  string employee_email = 4;
+  string employee_phone = 5;
+  string employee_position = 6;
+  string employee_type = 17; // Valid values: 'on_site', 'hybrid', 'ho' (head office)
+  string employee_gender = 18;
+
+  int32 employee_org_unit_id = 7;
+  OrgUnitInfo org_unit = 8;
+
+  int32 employee_supervisor_id = 9;
+  EmployeeInfo supervisor = 10;
+
+  map<string, string> employee_metadata = 11;
+  bool is_active = 12;
+
+  google.protobuf.Timestamp created_at = 13;
+  google.protobuf.Timestamp updated_at = 14;
+  int32 created_by = 15;
+  int32 updated_by = 16;
+
+  // Soft delete fields
+  optional google.protobuf.Timestamp deleted_at = 19;
+  optional int32 deleted_by = 20;
+}
+
+message EmployeeInfo {
+  int32 employee_id = 1;
+  string employee_number = 2;
+  string employee_name = 3;
+  string employee_position = 4;
+}
+
+message OrgUnitInfo {
+  int32 org_unit_id = 1;
+  string org_unit_code = 2;
+  string org_unit_name = 3;
+  string org_unit_type = 4;
+}
+
+message GetEmployeeRequest {
+  int32 employee_id = 1;
+}
+
+message GetEmployeeByNumberRequest {
+  string employee_number = 1;
+}
+
+message GetEmployeeByEmailRequest {
+  string employee_email = 1;
+}
+
+message ListEmployeesRequest {
+  common.Pagination pagination = 1;
+  optional int32 employee_org_unit_id = 2;
+  optional bool is_active = 3;
+  optional string search = 4;
+  optional bool include_details = 5;
+}
+
+message ListEmployeesResponse {
+  repeated Employee employees = 1;
+  common.PaginationInfo pagination_info = 2;
+}
+
+message CreateEmployeeRequest {
+  string employee_number = 1;
+  string employee_name = 2;
+  optional string employee_email = 3;
+  optional string employee_phone = 4;
+  optional string employee_position = 5;
+  optional string employee_type = 10; // Valid values: 'on_site', 'hybrid', 'ho' (head office)
+  optional string employee_gender = 11;
+  optional int32 employee_org_unit_id = 6;
+  optional int32 employee_supervisor_id = 7;
+  map<string, string> employee_metadata = 8;
+  int32 created_by = 9;
+}
+
+message UpdateEmployeeRequest {
+  int32 employee_id = 1;
+  optional string employee_name = 2;
+  optional string employee_email = 3;
+  optional string employee_phone = 4;
+  optional string employee_position = 5;
+  optional string employee_type = 11; // Valid values: 'on_site', 'hybrid', 'ho' (head office)
+  optional string employee_gender = 12;
+  optional int32 employee_org_unit_id = 6;
+  optional int32 employee_supervisor_id = 7;
+  map<string, string> employee_metadata = 8;
+  optional bool is_active = 9;
+  int32 updated_by = 10;
+}
+
+message DeleteEmployeeRequest {
+  int32 employee_id = 1;
+  bool soft_delete = 2;
+  int32 deleted_by = 3;
+}
+
+message GetSubordinatesRequest {
+  int32 employee_supervisor_id = 1;
+  bool recursive = 2;
+  common.Pagination pagination = 3;
+}
+
+message GetEmployeesByOrgUnitRequest {
+  int32 employee_org_unit_id = 1;
+  bool include_children = 2;
+  common.Pagination pagination = 3;
+}
+
+message BatchGetEmployeesRequest {
+  repeated int32 employee_ids = 1;
+}
+
+// Soft delete operations messages
+message SoftDeleteEmployeeRequest {
+  int32 employee_id = 1;
+  int32 deleted_by_user_id = 2;
+}
+
+message RestoreEmployeeRequest {
+  int32 employee_id = 1;
+}
+
+message ListDeletedEmployeesRequest {
+  common.Pagination pagination = 1;
+  optional string search = 2;
+}
