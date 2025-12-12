@@ -1,13 +1,12 @@
 """
-Service untuk operasi unified employee account (Employee + User + Guest)
+Service untuk operasi unified employee account (Employee + User)
 
 Service ini mengorkestrasikan operasi antara:
 - Employee (via gRPC ke workforce service)
-- User (database lokal HRIS)
-- Guest Account (database lokal HRIS)
+- User (database lokal HRIS) 
 - SSO (fire-and-forget sync)
 
-Pattern: Compensating Transaction untuk rollback
+Note: Guest handling is now done entirely in SSO service.
 """
 
 from typing import Optional, Dict, Any, List
@@ -19,7 +18,6 @@ from app.external_clients.grpc.employee_client import EmployeeGRPCClient
 from app.external_clients.grpc.org_unit_client import OrgUnitGRPCClient
 from app.external_clients.rest.sso_client import sso_client
 from app.modules.users.users.repositories.user_repository import UserRepository
-from app.modules.users.guests.repositories.guest_repository import GuestRepository
 from app.modules.users.rbac.repositories.role_repository import RoleRepository
 from app.core.exceptions import (
     NotFoundException,
@@ -55,22 +53,20 @@ FIELD_GUEST_ONLY = {"valid_from", "valid_until", "guest_type", "notes", "sponsor
 class EmployeeAccountService:
     """
     Service untuk operasi unified employee account
-
-    Mengelola lifecycle employee beserta user account dan guest account-nya
-    dengan support untuk rollback dan SSO sync (fire-and-forget)
+    
+    Note: Guest handling is now in SSO, guest_repo is deprecated.
     """
 
     def __init__(
         self,
         employee_client: EmployeeGRPCClient,
         user_repo: UserRepository,
-        guest_repo: GuestRepository,
         role_repo: RoleRepository,
         org_unit_client: OrgUnitGRPCClient,
     ):
         self.employee_client = employee_client
         self.user_repo = user_repo
-        self.guest_repo = guest_repo
+        self.guest_repo = None  # Deprecated - guest handling is in SSO
         self.role_repo = role_repo
         self.org_unit_client = org_unit_client
 
