@@ -75,3 +75,89 @@ class UserResponse(_message.Message):
     found: bool
     user: User
     def __init__(self, found: bool = ..., user: _Optional[_Union[User, _Mapping]] = ...) -> None: ...
+
+class CreateUserRequest(_message.Message):
+    __slots__ = ("email", "name", "phone", "role", "password", "alias", "gender", "date_of_birth", "address", "bio")
+    EMAIL_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    PHONE_FIELD_NUMBER: _ClassVar[int]
+    ROLE_FIELD_NUMBER: _ClassVar[int]
+    PASSWORD_FIELD_NUMBER: _ClassVar[int]
+    ALIAS_FIELD_NUMBER: _ClassVar[int]
+    GENDER_FIELD_NUMBER: _ClassVar[int]
+    DATE_OF_BIRTH_FIELD_NUMBER: _ClassVar[int]
+    ADDRESS_FIELD_NUMBER: _ClassVar[int]
+    BIO_FIELD_NUMBER: _ClassVar[int]
+    email: str
+    name: str
+    phone: str
+    role: str
+    password: str
+    alias: str
+    gender: str
+    date_of_birth: _timestamp_pb2.Timestamp
+    address: str
+    bio: str
+    def __init__(self, email: _Optional[str] = ..., name: _Optional[str] = ..., phone: _Optional[str] = ..., role: _Optional[str] = ..., password: _Optional[str] = ..., alias: _Optional[str] = ..., gender: _Optional[str] = ..., date_of_birth: _Optional[_Union[_timestamp_pb2.Timestamp, _Mapping]] = ..., address: _Optional[str] = ..., bio: _Optional[str] = ...) -> None: ...
+
+class CreateUserResponse(_message.Message):
+    __slots__ = ("success", "error", "user", "temporary_password")
+    SUCCESS_FIELD_NUMBER: _ClassVar[int]
+    ERROR_FIELD_NUMBER: _ClassVar[int]
+    USER_FIELD_NUMBER: _ClassVar[int]
+    TEMPORARY_PASSWORD_FIELD_NUMBER: _ClassVar[int]
+    success: bool
+    error: str
+    user: User
+    temporary_password: str
+    def __init__(self, success: bool = ..., error: _Optional[str] = ..., user: _Optional[_Union[User, _Mapping]] = ..., temporary_password: _Optional[str] = ...) -> None: ...
+
+class UpdateUserRequest(_message.Message):
+    __slots__ = ("user_id", "name", "email", "phone", "role", "status", "alias", "gender", "date_of_birth", "address", "bio")
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    EMAIL_FIELD_NUMBER: _ClassVar[int]
+    PHONE_FIELD_NUMBER: _ClassVar[int]
+    ROLE_FIELD_NUMBER: _ClassVar[int]
+    STATUS_FIELD_NUMBER: _ClassVar[int]
+    ALIAS_FIELD_NUMBER: _ClassVar[int]
+    GENDER_FIELD_NUMBER: _ClassVar[int]
+    DATE_OF_BIRTH_FIELD_NUMBER: _ClassVar[int]
+    ADDRESS_FIELD_NUMBER: _ClassVar[int]
+    BIO_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    name: str
+    email: str
+    phone: str
+    role: str
+    status: str
+    alias: str
+    gender: str
+    date_of_birth: _timestamp_pb2.Timestamp
+    address: str
+    bio: str
+    def __init__(self, user_id: _Optional[str] = ..., name: _Optional[str] = ..., email: _Optional[str] = ..., phone: _Optional[str] = ..., role: _Optional[str] = ..., status: _Optional[str] = ..., alias: _Optional[str] = ..., gender: _Optional[str] = ..., date_of_birth: _Optional[_Union[_timestamp_pb2.Timestamp, _Mapping]] = ..., address: _Optional[str] = ..., bio: _Optional[str] = ...) -> None: ...
+
+class UpdateUserResponse(_message.Message):
+    __slots__ = ("success", "error", "user")
+    SUCCESS_FIELD_NUMBER: _ClassVar[int]
+    ERROR_FIELD_NUMBER: _ClassVar[int]
+    USER_FIELD_NUMBER: _ClassVar[int]
+    success: bool
+    error: str
+    user: User
+    def __init__(self, success: bool = ..., error: _Optional[str] = ..., user: _Optional[_Union[User, _Mapping]] = ...) -> None: ...
+
+class DeleteUserRequest(_message.Message):
+    __slots__ = ("user_id",)
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    user_id: str
+    def __init__(self, user_id: _Optional[str] = ...) -> None: ...
+
+class DeleteUserResponse(_message.Message):
+    __slots__ = ("success", "error")
+    SUCCESS_FIELD_NUMBER: _ClassVar[int]
+    ERROR_FIELD_NUMBER: _ClassVar[int]
+    success: bool
+    error: str
+    def __init__(self, success: bool = ..., error: _Optional[str] = ...) -> None: ...

@@ -96,6 +96,95 @@ class SSOUserGRPCClient(BaseGRPCClient):
             "updated_at": user.updated_at.ToDatetime() if user.HasField("updated_at") else None,
         }
 
+    async def create_user(
+        self,
+        email: str,
+        name: str,
+        role: str = "user",
+        phone: Optional[str] = None,
+        password: Optional[str] = None,
+        alias: Optional[str] = None,
+        gender: Optional[str] = None,
+        address: Optional[str] = None,
+        bio: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Create user in SSO."""
+        try:
+            stub = await self.get_stub()
+            request = user_pb2.CreateUserRequest(
+                email=email,
+                name=name,
+                role=role,
+                phone=phone or "",
+                password=password or "",
+                alias=alias or "",
+                gender=gender or "",
+                address=address or "",
+                bio=bio or "",
+            )
+            response = await stub.CreateUser(request)
+            
+            return {
+                "success": response.success,
+                "error": response.error if response.HasField("error") else None,
+                "user": self._user_to_dict(response.user) if response.HasField("user") else None,
+                "temporary_password": response.temporary_password if response.HasField("temporary_password") else None,
+            }
+        except grpc.RpcError as e:
+            await self.handle_grpc_error(e)
+
+    async def update_user(
+        self,
+        user_id: str,
+        name: Optional[str] = None,
+        email: Optional[str] = None,
+        phone: Optional[str] = None,
+        role: Optional[str] = None,
+        status: Optional[str] = None,
+        alias: Optional[str] = None,
+        gender: Optional[str] = None,
+        address: Optional[str] = None,
+        bio: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Update user in SSO."""
+        try:
+            stub = await self.get_stub()
+            request = user_pb2.UpdateUserRequest(
+                user_id=user_id,
+                name=name or "",
+                email=email or "",
+                phone=phone or "",
+                role=role or "",
+                status=status or "",
+                alias=alias or "",
+                gender=gender or "",
+                address=address or "",
+                bio=bio or "",
+            )
+            response = await stub.UpdateUser(request)
+            
+            return {
+                "success": response.success,
+                "error": response.error if response.HasField("error") else None,
+                "user": self._user_to_dict(response.user) if response.HasField("user") else None,
+            }
+        except grpc.RpcError as e:
+            await self.handle_grpc_error(e)
+
+    async def delete_user(self, user_id: str) -> Dict[str, Any]:
+        """Soft delete user in SSO."""
+        try:
+            stub = await self.get_stub()
+            request = user_pb2.DeleteUserRequest(user_id=user_id)
+            response = await stub.DeleteUser(request)
+            
+            return {
+                "success": response.success,
+                "error": response.error if response.HasField("error") else None,
+            }
+        except grpc.RpcError as e:
+            await self.handle_grpc_error(e)
+
 
 class SSOAuthGRPCClient(BaseGRPCClient):
     """gRPC client for SSO AuthService."""
