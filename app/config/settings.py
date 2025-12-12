@@ -36,14 +36,23 @@ class Settings(BaseSettings):
     # SSO Service for user sync
     SSO_SERVICE_URL: str = Field(default="http://localhost:8001")
     SSO_SERVICE_API_KEY: str = Field(default="your-secret-api-key-here")
-    SSO_HRIS_APPLICATION_ID: int = Field(default=1, description="Application ID for HRIS in SSO")
+    SSO_HRIS_APPLICATION_ID: int = Field(
+        default=1, description="Application ID for HRIS in SSO"
+    )
     SSO_GRPC_HOST: str = Field(default="localhost")
     SSO_GRPC_PORT: int = Field(default=50051)
 
     # Nominatim OpenStreetMap Geocoding Service
-    NOMINATIM_BASE_URL: str = Field(default="https://nominatim.openstreetmap.org", description="Base URL for Nominatim API")
-    NOMINATIM_USER_AGENT: str = Field(default="ARGA-HRIS/1.0", description="User agent for Nominatim API (required)")
-    NOMINATIM_TIMEOUT: float = Field(default=10.0, description="Timeout for Nominatim API requests in seconds")
+    NOMINATIM_BASE_URL: str = Field(
+        default="https://nominatim.openstreetmap.org",
+        description="Base URL for Nominatim API",
+    )
+    NOMINATIM_USER_AGENT: str = Field(
+        default="ARGA-HRIS/1.0", description="User agent for Nominatim API (required)"
+    )
+    NOMINATIM_TIMEOUT: float = Field(
+        default=10.0, description="Timeout for Nominatim API requests in seconds"
+    )
 
     SUPER_ADMIN_EMAIL: str | None = None
     SUPER_ADMIN_SSO_ID: str | None = None
@@ -55,7 +64,9 @@ class Settings(BaseSettings):
     # File Upload Settings - size limits (bytes) dapat di-override via env
     # MIME types constants ada di app.config.constants.FileUploadConstants
     MAX_IMAGE_SIZE: int = Field(default=FileUploadConstants.DEFAULT_MAX_IMAGE_SIZE)
-    MAX_DOCUMENT_SIZE: int = Field(default=FileUploadConstants.DEFAULT_MAX_DOCUMENT_SIZE)
+    MAX_DOCUMENT_SIZE: int = Field(
+        default=FileUploadConstants.DEFAULT_MAX_DOCUMENT_SIZE
+    )
     MAX_VIDEO_SIZE: int = Field(default=FileUploadConstants.DEFAULT_MAX_VIDEO_SIZE)
 
     @property
@@ -86,6 +97,19 @@ class Settings(BaseSettings):
     @property
     def sso_grpc_address(self) -> str:
         return f"{self.SSO_GRPC_HOST}:{self.SSO_GRPC_PORT}"
+
+    # File Upload Constants - exposed as properties for file_upload.py compatibility
+    @property
+    def ALLOWED_IMAGE_TYPES(self) -> set:
+        return FileUploadConstants.ALLOWED_IMAGE_TYPES
+
+    @property
+    def ALLOWED_DOCUMENT_TYPES(self) -> set:
+        return FileUploadConstants.ALLOWED_DOCUMENT_TYPES
+
+    @property
+    def ALLOWED_VIDEO_TYPES(self) -> set:
+        return FileUploadConstants.ALLOWED_VIDEO_TYPES
 
     model_config = SettingsConfigDict(
         env_file=".env",

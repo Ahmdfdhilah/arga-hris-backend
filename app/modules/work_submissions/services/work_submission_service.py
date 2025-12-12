@@ -20,7 +20,7 @@ from app.core.exceptions.client_error import NotFoundException, ConflictExceptio
 from app.core.exceptions import ValidationException
 from app.core.utils.file_upload import (
     upload_file_to_gcp,
-    generate_signed_url_from_path,
+    generate_signed_url_for_path,
     delete_file_from_gcp_url,
 )
 from app.core.utils.datetime import get_utc_now
@@ -68,9 +68,7 @@ class WorkSubmissionService:
             if not file_path or not file_name or file_size is None or not file_type:
                 continue
 
-            signed_url = generate_signed_url_from_path(
-                file_path=file_path, expiration_days=7
-            )
+            signed_url = generate_signed_url_for_path(file_path)
             if signed_url:
                 files_with_urls.append(
                     FileMetadata(
@@ -285,7 +283,7 @@ class WorkSubmissionService:
         for file_meta in submission.files or []:
             file_path = file_meta.get("file_path")
             if file_path:
-                signed_url = generate_signed_url_from_path(file_path)
+                signed_url = generate_signed_url_for_path(file_path)
                 if signed_url:
                     delete_file_from_gcp_url(signed_url)
 
@@ -320,14 +318,13 @@ class WorkSubmissionService:
 
         uploaded_files_metadata: List[Dict[str, Any]] = []
         for file in files:
-            file_path = await upload_file_to_gcp(
+            _, file_path = await upload_file_to_gcp(
                 file=file,
                 entity_type="work_submissions",
                 entity_id=submission.employee_id,
                 subfolder=f"{submission.submission_month.year}/{submission.submission_month.month}/{submission_id}",
                 allowed_types=self.ALLOWED_FILE_TYPES,
                 max_size=self.MAX_FILE_SIZE,
-                return_path_only=True,
             )
 
             content = await file.read()
@@ -405,7 +402,7 @@ class WorkSubmissionService:
         for file_meta in current_files:
             if file_meta.get("file_path") == file_path:
                 file_found = True
-                signed_url = generate_signed_url_from_path(file_path)
+                signed_url = generate_signed_url_for_path(file_path)
                 if signed_url:
                     delete_file_from_gcp_url(signed_url)
             else:

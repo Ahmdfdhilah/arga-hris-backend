@@ -1,5 +1,9 @@
-from pydantic import BaseModel, EmailStr
-from typing import Optional, Dict,  List
+"""
+Response schemas untuk Employee operations - Simplified (SSO-first)
+"""
+
+from pydantic import BaseModel
+from typing import Optional, Dict, List
 
 
 class EmployeeOrgUnitNestedResponse(BaseModel):
@@ -53,42 +57,35 @@ class EmployeeResponse(BaseModel):
 
 
 class UserNestedResponse(BaseModel):
-    """User data in employee account response"""
+    """User data - HRIS user is minimal now (linking only)"""
     id: int
-    email: EmailStr
-    first_name: str
-    last_name: str
-    org_unit_id: Optional[int] = None
+    sso_id: str
     employee_id: Optional[int] = None
-    account_type: str = 'regular'
+    org_unit_id: Optional[int] = None
     is_active: bool = True
-    sso_id: Optional[int] = None
 
     class Config:
         from_attributes = True
 
 
+# Keep for backward compat but deprecated
 class GuestAccountNestedResponse(BaseModel):
-    """Guest account data in employee account response"""
-    id: int
-    user_id: int
-    guest_type: str
-    valid_from: Optional[str] = None
-    valid_until: Optional[str] = None
-    sponsor_id: Optional[int] = None
-    notes: Optional[str] = None
+    """Deprecated - Guest handling is in SSO now"""
+    id: int = 0
+    user_id: int = 0
+    guest_type: str = ""
 
     class Config:
         from_attributes = True
 
 
 class EmployeeAccountData(BaseModel):
-    """Unified employee account data (Employee + User + Guest)"""
+    """Employee account data (Employee + SSO User link)"""
     employee: EmployeeResponse
     user: Optional[UserNestedResponse] = None
-    guest_account: Optional[GuestAccountNestedResponse] = None
+    guest_account: Optional[GuestAccountNestedResponse] = None  # Always None now
     temporary_password: Optional[str] = None
-    warnings: List[str] = []
+    warnings: Optional[List[str]] = None
 
     class Config:
         from_attributes = True
@@ -97,10 +94,10 @@ class EmployeeAccountData(BaseModel):
 class EmployeeAccountUpdateData(BaseModel):
     """Response data untuk update employee with account"""
     employee: Optional[EmployeeResponse] = None
-    user: UserNestedResponse
-    guest_account: Optional[GuestAccountNestedResponse] = None
-    updated_fields: Dict[str, List[str]]
-    warnings: List[str] = []
+    user: Optional[UserNestedResponse] = None
+    guest_account: Optional[GuestAccountNestedResponse] = None  # Always None now
+    updated_fields: Optional[Dict[str, bool]] = None
+    warnings: Optional[List[str]] = None
 
     class Config:
         from_attributes = True
@@ -108,9 +105,12 @@ class EmployeeAccountUpdateData(BaseModel):
 
 class EmployeeAccountListItem(BaseModel):
     """Single item in employee account list"""
-    employee: Optional[EmployeeResponse] = None
-    user: UserNestedResponse
-    guest_account: Optional[GuestAccountNestedResponse] = None
+    id: int
+    sso_id: Optional[str] = None
+    employee_id: Optional[int] = None
+    name: str = ""
+    email: str = ""
+    is_active: bool = True
 
     class Config:
         from_attributes = True

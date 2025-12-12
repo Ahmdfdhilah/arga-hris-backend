@@ -1,18 +1,5 @@
 """
-Request schemas untuk Employee operations
-Sesuai dengan models di workforce service: internal/models/employee.go
-Field mapping: employee_* -> * (remove prefix untuk simplicity)
-
-Workforce Model Fields:
-- employee_number -> number
-- employee_name -> name (combined from first_name + last_name)
-- employee_email -> email
-- employee_phone -> phone
-- employee_position -> position
-- employee_org_unit_id -> org_unit_id
-- employee_supervisor_id -> supervisor_id
-- employee_metadata -> metadata (JSONB)
-- is_active -> is_active
+Request schemas untuk Employee operations - Simplified (no guest handling)
 """
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
@@ -20,13 +7,7 @@ from typing import Optional, List
 
 
 class EmployeeCreateRequest(BaseModel):
-    """
-    Request schema untuk membuat employee baru
-
-    Note:
-    - name akan di-combine dari first_name + last_name
-    - date_of_birth, hire_date bisa disimpan di metadata jika perlu
-    """
+    """Request schema untuk membuat employee baru."""
 
     number: str = Field(
         ..., min_length=1, max_length=50, description="Nomor karyawan (harus unik)"
@@ -39,7 +20,7 @@ class EmployeeCreateRequest(BaseModel):
     phone: Optional[str] = Field(None, max_length=50, description="Nomor telepon")
     position: Optional[str] = Field(None, max_length=255, description="Jabatan/Posisi")
     employee_type: Optional[str] = Field(
-        None, description="Tipe karyawan: 'on_site' atau 'hybrid'"
+        None, description="Tipe karyawan: 'on_site', 'hybrid', atau 'ho'"
     )
     employee_gender: Optional[str] = Field(
         None, description="Gender karyawan: 'male' atau 'female'"
@@ -70,7 +51,6 @@ class EmployeeCreateRequest(BaseModel):
     @classmethod
     def validate_phone(cls, v):
         if v is not None and v.strip():
-            # Remove common phone separators
             cleaned = (
                 v.strip()
                 .replace("-", "")
@@ -89,8 +69,8 @@ class EmployeeCreateRequest(BaseModel):
     @classmethod
     def validate_employee_type(cls, v):
         if v is not None:
-            if v not in ["on_site", "hybrid"]:
-                raise ValueError("employee_type harus 'on_site' atau 'hybrid'")
+            if v not in ["on_site", "hybrid", "ho"]:
+                raise ValueError("employee_type harus 'on_site', 'hybrid', atau 'ho'")
         return v
 
     @field_validator("employee_gender")
@@ -101,31 +81,9 @@ class EmployeeCreateRequest(BaseModel):
                 raise ValueError("employee_gender harus 'male' atau 'female'")
         return v
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "number": "EMP001",
-                "first_name": "John",
-                "last_name": "Doe",
-                "email": "john.doe@company.com",
-                "phone": "+62812345678",
-                "position": "Software Engineer",
-                "employee_type": "on_site",
-                "employee_gender": "male",
-                "org_unit_id": 5,
-                "supervisor_id": 3,
-            }
-        }
-
 
 class EmployeeUpdateRequest(BaseModel):
-    """
-    Request schema untuk update employee
-
-    Note:
-    - name akan di-combine dari first_name + last_name jika keduanya ada
-    - Email TIDAK BISA diubah karena merupakan core credential untuk login
-    """
+    """Request schema untuk update employee."""
 
     first_name: Optional[str] = Field(
         None, min_length=1, max_length=100, description="Nama depan"
@@ -136,7 +94,7 @@ class EmployeeUpdateRequest(BaseModel):
     phone: Optional[str] = Field(None, max_length=50, description="Nomor telepon")
     position: Optional[str] = Field(None, max_length=255, description="Jabatan/Posisi")
     employee_type: Optional[str] = Field(
-        None, description="Tipe karyawan: 'on_site' atau 'hybrid'"
+        None, description="Tipe karyawan: 'on_site', 'hybrid', atau 'ho'"
     )
     employee_gender: Optional[str] = Field(
         None, description="Gender karyawan: 'male' atau 'female'"
@@ -181,8 +139,8 @@ class EmployeeUpdateRequest(BaseModel):
     @classmethod
     def validate_employee_type(cls, v):
         if v is not None:
-            if v not in ["on_site", "hybrid"]:
-                raise ValueError("employee_type harus 'on_site' atau 'hybrid'")
+            if v not in ["on_site", "hybrid", "ho"]:
+                raise ValueError("employee_type harus 'on_site', 'hybrid', atau 'ho'")
         return v
 
     @field_validator("employee_gender")
@@ -193,21 +151,14 @@ class EmployeeUpdateRequest(BaseModel):
                 raise ValueError("employee_gender harus 'male' atau 'female'")
         return v
 
-    class Config:
-        from_attributes = True
-
 
 class CreateEmployeeWithAccountRequest(BaseModel):
     """
-    Request schema untuk membuat employee dengan account (unified)
-
-    Mendukung 3 tipe account:
-    - 'user': Employee dengan user account regular
-    - 'guest': Employee dengan guest account (wajib ada guest fields)
-    - 'none': Employee tanpa account
+    Request schema untuk membuat employee dengan SSO user account.
+    All employees get SSO user account automatically.
     """
 
-    # Employee fields (wajib)
+    # Employee fields (required)
     number: str = Field(
         ..., min_length=1, max_length=50, description="Nomor karyawan (harus unik)"
     )
@@ -216,13 +167,13 @@ class CreateEmployeeWithAccountRequest(BaseModel):
         ..., min_length=1, max_length=100, description="Nama belakang"
     )
     email: EmailStr = Field(..., description="Email karyawan (harus unik)")
-    org_unit_id: Optional[int] = Field(None, gt=0, description="ID unit organisasi (opsional)")
+    org_unit_id: Optional[int] = Field(None, gt=0, description="ID unit organisasi")
 
-    # Employee fields (opsional)
+    # Employee fields (optional)
     phone: Optional[str] = Field(None, max_length=50, description="Nomor telepon")
     position: Optional[str] = Field(None, max_length=255, description="Jabatan/Posisi")
     employee_type: Optional[str] = Field(
-        None, description="Tipe karyawan: 'on_site' atau 'hybrid'"
+        None, description="Tipe karyawan: 'on_site', 'hybrid', atau 'ho'"
     )
     employee_gender: Optional[str] = Field(
         None, description="Gender karyawan: 'male' atau 'female'"
@@ -230,26 +181,6 @@ class CreateEmployeeWithAccountRequest(BaseModel):
     supervisor_id: Optional[int] = Field(
         None, gt=0, description="ID atasan langsung (employee ID)"
     )
-
-    # Account type
-    account_type: str = Field(
-        "none", description="Tipe akun: 'user', 'guest', atau 'none'"
-    )
-
-    # Guest fields (wajib untuk account_type='guest')
-    guest_type: Optional[str] = Field(
-        None, max_length=50, description="Tipe guest (wajib untuk guest)"
-    )
-    valid_from: Optional[str] = Field(
-        None, description="Tanggal mulai berlaku (ISO format)"
-    )
-    valid_until: Optional[str] = Field(
-        None, description="Tanggal akhir berlaku (ISO format, wajib untuk guest)"
-    )
-    sponsor_id: Optional[int] = Field(
-        None, gt=0, description="ID sponsor (employee ID)"
-    )
-    notes: Optional[str] = Field(None, description="Catatan untuk guest")
 
     @field_validator("number")
     @classmethod
@@ -286,19 +217,12 @@ class CreateEmployeeWithAccountRequest(BaseModel):
             return v.strip()
         return v
 
-    @field_validator("account_type")
-    @classmethod
-    def validate_account_type(cls, v):
-        if v not in ["user", "guest", "none"]:
-            raise ValueError("account_type harus 'user', 'guest', atau 'none'")
-        return v
-
     @field_validator("employee_type")
     @classmethod
     def validate_employee_type(cls, v):
         if v is not None:
-            if v not in ["on_site", "hybrid"]:
-                raise ValueError("employee_type harus 'on_site' atau 'hybrid'")
+            if v not in ["on_site", "hybrid", "ho"]:
+                raise ValueError("employee_type harus 'on_site', 'hybrid', atau 'ho'")
         return v
 
     @field_validator("employee_gender")
@@ -309,24 +233,15 @@ class CreateEmployeeWithAccountRequest(BaseModel):
                 raise ValueError("employee_gender harus 'male' atau 'female'")
         return v
 
-    class Config:
-        from_attributes = True
-
 
 class UpdateEmployeeWithAccountRequest(BaseModel):
     """
-    Request schema untuk update employee dengan account (unified)
-
-    Field dikategorikan menjadi:
-    - Intersection: first_name, last_name, org_unit_id (update employee + user)
-    - Employee-only: number, phone, position, supervisor_id (update employee saja)
-    - Guest-only: valid_from, valid_until, guest_type, notes, sponsor_id (update guest saja)
-
-    NOTE: Email TIDAK BISA diubah karena merupakan core credential untuk login dan authentication.
-          Jika perlu mengubah email, user harus deactivate account lama dan buat account baru.
+    Request schema untuk update employee dengan sync ke SSO.
+    
+    NOTE: Email TIDAK BISA diubah karena core credential untuk login.
     """
 
-    # Intersection fields (update employee + user)
+    # Name fields (update employee + SSO)
     first_name: Optional[str] = Field(
         None, min_length=1, max_length=100, description="Nama depan"
     )
@@ -342,7 +257,7 @@ class UpdateEmployeeWithAccountRequest(BaseModel):
     phone: Optional[str] = Field(None, max_length=50, description="Nomor telepon")
     position: Optional[str] = Field(None, max_length=255, description="Jabatan/Posisi")
     employee_type: Optional[str] = Field(
-        None, description="Tipe karyawan: 'on_site' atau 'hybrid'"
+        None, description="Tipe karyawan: 'on_site', 'hybrid', atau 'ho'"
     )
     employee_gender: Optional[str] = Field(
         None, description="Gender karyawan: 'male' atau 'female'"
@@ -351,16 +266,11 @@ class UpdateEmployeeWithAccountRequest(BaseModel):
         None, description="ID atasan langsung (null untuk hapus)"
     )
 
-    # Guest-only fields
-    valid_from: Optional[str] = Field(
-        None, description="Tanggal mulai berlaku (ISO format)"
-    )
-    valid_until: Optional[str] = Field(
-        None, description="Tanggal akhir berlaku (ISO format)"
-    )
-    guest_type: Optional[str] = Field(None, max_length=50, description="Tipe guest")
-    notes: Optional[str] = Field(None, description="Catatan untuk guest")
-    sponsor_id: Optional[int] = Field(None, description="ID sponsor (null untuk hapus)")
+    # SSO profile fields (optional)
+    alias: Optional[str] = Field(None, max_length=100, description="Alias/nickname")
+    gender: Optional[str] = Field(None, max_length=20, description="Gender untuk SSO profile")
+    address: Optional[str] = Field(None, max_length=500, description="Alamat")
+    bio: Optional[str] = Field(None, max_length=1000, description="Bio")
 
     @field_validator("first_name", "last_name")
     @classmethod
@@ -406,7 +316,7 @@ class UpdateEmployeeWithAccountRequest(BaseModel):
     def validate_employee_type(cls, v):
         if v is not None:
             if v not in ["on_site", "hybrid", "ho"]:
-                raise ValueError("employee_type harus 'on_site' atau 'hybrid'")
+                raise ValueError("employee_type harus 'on_site', 'hybrid', atau 'ho'")
         return v
 
     @field_validator("employee_gender")
@@ -417,36 +327,9 @@ class UpdateEmployeeWithAccountRequest(BaseModel):
                 raise ValueError("employee_gender harus 'male' atau 'female'")
         return v
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "first_name": "Jane",
-                "position": "Senior Software Engineer",
-                "employee_type": "hybrid",
-                "org_unit_id": 6,
-            }
-        }
-
 
 class EmployeeBulkItem(BaseModel):
-    """
-    Single employee item untuk bulk insert
-
-    Mapping dari Excel 'Karyawan':
-    - Nomor -> number
-    - Nama Depan -> first_name
-    - Nama Belakang -> last_name
-    - Email -> email
-    - Department -> org_unit_code (akan di-resolve ke org_unit_id)
-    - Nomor HP -> phone
-    - Jabatan -> position
-    - Tipe Karyawan -> employee_type
-    - Jenis Karyawan -> account_type
-    - Gender -> employee_gender
-    - Awal Kontrak -> valid_from
-    - Selesai Kontrak -> valid_until
-    - Catatan -> notes
-    """
+    """Single employee item untuk bulk insert."""
 
     number: str = Field(
         ..., min_length=1, max_length=50, description="Nomor karyawan (harus unik)"
@@ -457,24 +340,15 @@ class EmployeeBulkItem(BaseModel):
     )
     email: EmailStr = Field(..., description="Email karyawan (harus unik)")
     org_unit_name: str = Field(
-        ..., description="Kode unit organisasi (akan di-resolve ke ID)"
+        ..., description="Nama unit organisasi (akan di-resolve ke ID)"
     )
     phone: Optional[str] = Field(None, max_length=50, description="Nomor telepon")
     position: Optional[str] = Field(None, max_length=255, description="Jabatan/Posisi")
     employee_type: Optional[str] = Field(
-        None, description="Tipe karyawan: 'on_site' atau 'hybrid', 'ho'"
-    )
-    account_type: str = Field(
-        "user", description="Tipe akun: 'user', 'guest', atau 'none'"
+        None, description="Tipe karyawan: 'on_site', 'hybrid', atau 'ho'"
     )
     employee_gender: Optional[str] = Field(
         None, description="Gender karyawan: 'male' atau 'female'"
-    )
-    valid_from: Optional[str] = Field(
-        None, description="Tanggal mulai berlaku (ISO format)"
-    )
-    valid_until: Optional[str] = Field(
-        None, description="Tanggal akhir berlaku (ISO format)"
     )
     notes: Optional[str] = Field(None, description="Catatan")
     row_number: Optional[int] = Field(
@@ -520,8 +394,8 @@ class EmployeeBulkItem(BaseModel):
     @classmethod
     def validate_employee_type(cls, v):
         if v is not None:
-            if v not in ["on_site", "hybrid", 'ho']:
-                raise ValueError("employee_type harus 'on_site' , 'ho', atau 'hybrid'")
+            if v not in ["on_site", "hybrid", "ho"]:
+                raise ValueError("employee_type harus 'on_site', 'hybrid', atau 'ho'")
         return v
 
     @field_validator("employee_gender")
@@ -530,13 +404,6 @@ class EmployeeBulkItem(BaseModel):
         if v is not None:
             if v not in ["male", "female"]:
                 raise ValueError("employee_gender harus 'male' atau 'female'")
-        return v
-
-    @field_validator("account_type")
-    @classmethod
-    def validate_account_type(cls, v):
-        if v not in ["user", "guest", "none"]:
-            raise ValueError("account_type harus 'user', 'guest', atau 'none'")
         return v
 
     @field_validator("org_unit_name")
@@ -548,7 +415,7 @@ class EmployeeBulkItem(BaseModel):
 
 
 class EmployeeBulkInsertRequest(BaseModel):
-    """Request schema untuk bulk insert employees"""
+    """Request schema untuk bulk insert employees."""
 
     items: List[EmployeeBulkItem] = Field(
         ..., min_length=1, description="List employees untuk di-insert"

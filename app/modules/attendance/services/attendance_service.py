@@ -32,7 +32,7 @@ from app.core.exceptions import (
     ValidationException,
     BadRequestException,
 )
-from app.core.utils.file_upload import upload_file_to_gcp, generate_signed_url_from_path
+from app.core.utils.file_upload import upload_file_to_gcp, generate_signed_url_for_path
 from app.config.constants import FileUploadConstants
 from app.config.settings import settings
 from app.config.constants import AttendanceConstants
@@ -185,14 +185,13 @@ class AttendanceService:
         client_ip = request_obj.client.host if request_obj.client else None
 
         # Handle selfie upload to GCP (save path only)
-        selfie_path = await upload_file_to_gcp(
+        _, selfie_path = await upload_file_to_gcp(
             file=selfie,
             entity_type="attendances",
             entity_id=employee_id,
             subfolder=f"check_in/{today.strftime('%Y-%m-%d')}",
             allowed_types=FileUploadConstants.ALLOWED_IMAGE_TYPES,
             max_size=settings.MAX_IMAGE_SIZE,
-            return_path_only=True,
         )
 
         # Handle location data and reverse geocoding
@@ -200,8 +199,7 @@ class AttendanceService:
         if request.latitude is not None and request.longitude is not None:
             # Get address from coordinates using Nominatim
             location_name = await nominatim_client.reverse_geocode(
-                latitude=request.latitude,
-                longitude=request.longitude
+                latitude=request.latitude, longitude=request.longitude
             )
 
         if existing:
@@ -242,7 +240,11 @@ class AttendanceService:
             raise ValidationException("Gagal membuat atau update data attendance")
 
         # Generate signed URL for response
-        check_in_url = generate_signed_url_from_path(attendance.check_in_selfie_path) if attendance.check_in_selfie_path else None
+        check_in_url = (
+            generate_signed_url_for_path(attendance.check_in_selfie_path)
+            if attendance.check_in_selfie_path
+            else None
+        )
         response = AttendanceResponse.from_orm_with_urls(
             attendance, check_in_url=check_in_url, check_out_url=None
         )
@@ -347,14 +349,13 @@ class AttendanceService:
         client_ip = request_obj.client.host if request_obj.client else None
 
         # Handle selfie upload to GCP (save path only)
-        selfie_path = await upload_file_to_gcp(
+        _, selfie_path = await upload_file_to_gcp(
             file=selfie,
             entity_type="attendances",
             entity_id=employee_id,
             subfolder=f"check_out/{today.strftime('%Y-%m-%d')}",
             allowed_types=FileUploadConstants.ALLOWED_IMAGE_TYPES,
             max_size=settings.MAX_IMAGE_SIZE,
-            return_path_only=True,
         )
 
         # Handle location data and reverse geocoding
@@ -362,8 +363,7 @@ class AttendanceService:
         if request.latitude is not None and request.longitude is not None:
             # Get address from coordinates using Nominatim
             location_name = await nominatim_client.reverse_geocode(
-                latitude=request.latitude,
-                longitude=request.longitude
+                latitude=request.latitude, longitude=request.longitude
             )
 
         # Calculate work hours (until 18:00) and overtime hours (after 18:00)
@@ -390,8 +390,16 @@ class AttendanceService:
             raise ValidationException("Gagal update data attendance untuk check-out")
 
         # Generate signed URLs for response
-        check_in_url = generate_signed_url_from_path(attendance.check_in_selfie_path) if attendance.check_in_selfie_path else None
-        check_out_url = generate_signed_url_from_path(attendance.check_out_selfie_path) if attendance.check_out_selfie_path else None
+        check_in_url = (
+            generate_signed_url_for_path(attendance.check_in_selfie_path)
+            if attendance.check_in_selfie_path
+            else None
+        )
+        check_out_url = (
+            generate_signed_url_for_path(attendance.check_out_selfie_path)
+            if attendance.check_out_selfie_path
+            else None
+        )
         response = AttendanceResponse.from_orm_with_urls(
             attendance, check_in_url=check_in_url, check_out_url=check_out_url
         )
@@ -459,8 +467,8 @@ class AttendanceService:
 
         attendances_data: list[AttendanceListResponse] = []
         for att in attendances:
-            check_in_url = generate_signed_url_from_path(att.check_in_selfie_path)
-            check_out_url = generate_signed_url_from_path(att.check_out_selfie_path)
+            check_in_url = generate_signed_url_for_path(att.check_in_selfie_path)
+            check_out_url = generate_signed_url_for_path(att.check_out_selfie_path)
             response = AttendanceListResponse.from_orm_with_urls(
                 attendance=att,
                 employee_name=employee_name,
@@ -567,8 +575,8 @@ class AttendanceService:
                 pass
 
             # Generate signed URLs for selfies
-            check_in_url = generate_signed_url_from_path(att.check_in_selfie_path)
-            check_out_url = generate_signed_url_from_path(att.check_out_selfie_path)
+            check_in_url = generate_signed_url_for_path(att.check_in_selfie_path)
+            check_out_url = generate_signed_url_for_path(att.check_out_selfie_path)
 
             response = AttendanceListResponse.from_orm_with_urls(
                 attendance=att,
@@ -677,8 +685,8 @@ class AttendanceService:
                 pass
 
             # Generate signed URLs for selfies
-            check_in_url = generate_signed_url_from_path(att.check_in_selfie_path)
-            check_out_url = generate_signed_url_from_path(att.check_out_selfie_path)
+            check_in_url = generate_signed_url_for_path(att.check_in_selfie_path)
+            check_out_url = generate_signed_url_for_path(att.check_out_selfie_path)
 
             response = AttendanceListResponse.from_orm_with_urls(
                 attendance=att,
@@ -792,7 +800,9 @@ class AttendanceService:
             notes=request.notes,
         )
 
-    async def check_attendance_status(self, employee_id: int) -> AttendanceStatusCheckResponse:
+    async def check_attendance_status(
+        self, employee_id: int
+    ) -> AttendanceStatusCheckResponse:
         """
         Check apakah employee bisa absen hari ini (check status cuti dan hari kerja).
 
@@ -847,8 +857,8 @@ class AttendanceService:
         if is_on_leave:
             leave_details = LeaveDetailsResponse(
                 leave_type=leave_request.leave_type,
-                start_date=leave_request.start_date.strftime('%Y-%m-%d'),
-                end_date=leave_request.end_date.strftime('%Y-%m-%d'),
+                start_date=leave_request.start_date.strftime("%Y-%m-%d"),
+                end_date=leave_request.end_date.strftime("%Y-%m-%d"),
                 total_days=leave_request.total_days,
                 reason=leave_request.reason,
             )
@@ -883,8 +893,16 @@ class AttendanceService:
             )
 
         # Generate signed URLs for response
-        check_in_url = generate_signed_url_from_path(attendance.check_in_selfie_path) if attendance.check_in_selfie_path else None
-        check_out_url = generate_signed_url_from_path(attendance.check_out_selfie_path) if attendance.check_out_selfie_path else None
+        check_in_url = (
+            generate_signed_url_for_path(attendance.check_in_selfie_path)
+            if attendance.check_in_selfie_path
+            else None
+        )
+        check_out_url = (
+            generate_signed_url_for_path(attendance.check_out_selfie_path)
+            if attendance.check_out_selfie_path
+            else None
+        )
         response = AttendanceResponse.from_orm_with_urls(
             attendance, check_in_url=check_in_url, check_out_url=check_out_url
         )
@@ -936,13 +954,17 @@ class AttendanceService:
         # Create datetime with microsecond precision for consistency with actual check-in/check-out
         check_in_datetime = datetime.combine(
             attendance_date,
-            datetime.min.time().replace(hour=9, minute=0, second=0, microsecond=now.microsecond),
-            tzinfo=timezone.utc
+            datetime.min.time().replace(
+                hour=9, minute=0, second=0, microsecond=now.microsecond
+            ),
+            tzinfo=timezone.utc,
         )
         check_out_datetime = datetime.combine(
             attendance_date,
-            datetime.min.time().replace(hour=17, minute=0, second=0, microsecond=now.microsecond),
-            tzinfo=timezone.utc
+            datetime.min.time().replace(
+                hour=17, minute=0, second=0, microsecond=now.microsecond
+            ),
+            tzinfo=timezone.utc,
         )
 
         # Calculate work hours (8 hours standard)
@@ -950,7 +972,9 @@ class AttendanceService:
         overtime_hours = 0.0
 
         # Build update notes
-        auto_note = f"Diubah oleh {admin_name} pada {now.strftime('%d-%m-%Y %H:%M:%S')} WIB"
+        auto_note = (
+            f"Diubah oleh {admin_name} pada {now.strftime('%d-%m-%Y %H:%M:%S')} WIB"
+        )
         final_notes = f"{notes}. {auto_note}" if notes else auto_note
 
         # Update attendance
@@ -964,14 +988,24 @@ class AttendanceService:
             "check_out_notes": final_notes,
         }
 
-        updated_attendance = await self.attendance_repo.update(attendance_id, update_data)
+        updated_attendance = await self.attendance_repo.update(
+            attendance_id, update_data
+        )
 
         if not updated_attendance:
             raise ValidationException("Gagal update attendance")
 
         # Generate signed URLs for response
-        check_in_url = generate_signed_url_from_path(updated_attendance.check_in_selfie_path) if updated_attendance.check_in_selfie_path else None
-        check_out_url = generate_signed_url_from_path(updated_attendance.check_out_selfie_path) if updated_attendance.check_out_selfie_path else None
+        check_in_url = (
+            generate_signed_url_for_path(updated_attendance.check_in_selfie_path)
+            if updated_attendance.check_in_selfie_path
+            else None
+        )
+        check_out_url = (
+            generate_signed_url_for_path(updated_attendance.check_out_selfie_path)
+            if updated_attendance.check_out_selfie_path
+            else None
+        )
         response = AttendanceResponse.from_orm_with_urls(
             updated_attendance, check_in_url=check_in_url, check_out_url=check_out_url
         )
@@ -1161,8 +1195,12 @@ class AttendanceService:
                 org_unit_name=org_unit_name,
                 attendances=employee_attendances,
                 total_present_days=total_present_days,
-                total_work_hours=Decimal(str(total_work_hours)) if total_work_hours else None,
-                total_overtime_hours=Decimal(str(total_overtime_hours)) if total_overtime_hours else None,
+                total_work_hours=(
+                    Decimal(str(total_work_hours)) if total_work_hours else None
+                ),
+                total_overtime_hours=(
+                    Decimal(str(total_overtime_hours)) if total_overtime_hours else None
+                ),
             )
             report_data.append(employee_report)
 
