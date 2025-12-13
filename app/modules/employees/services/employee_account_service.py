@@ -1,20 +1,20 @@
 """
-Employee Account Service - SSO-First Flow
+Employee Account Service - SSO-First Flow (Refactored for Local Repository)
 
 Orchestrates operations between:
 - SSO (gRPC) - User authentication/profile
-- Workforce (gRPC) - Employee data
+- Local Repositories - Employee/OrgUnit data (master)
 - HRIS DB - Local user linking
 
 Flow: SSO → Employee → HRIS User (idempotent, auto-recovery)
 """
 
-from typing import Optional, Dict, Any, List
-from datetime import datetime
+from typing import Optional, Dict, Any
 import logging
 
-from app.external_clients.grpc.employee_client import EmployeeGRPCClient
-from app.external_clients.grpc.org_unit_client import OrgUnitGRPCClient
+from app.modules.employees.repositories.employee_repository import EmployeeRepository
+from app.modules.org_units.repositories.org_unit_repository import OrgUnitRepository
+from app.modules.employees.models.employee import Employee
 from app.external_clients.grpc.sso_client import SSOUserGRPCClient
 from app.modules.users.users.repositories.user_repository import UserRepository
 from app.modules.users.rbac.repositories.role_repository import RoleRepository
@@ -36,20 +36,20 @@ logger = logging.getLogger(__name__)
 class EmployeeAccountService:
     """
     Service untuk operasi unified employee account.
-    Uses SSO gRPC for user management - no local user data duplication.
+    Uses local repositories for employee/org_unit data, SSO gRPC for user management.
     """
 
     def __init__(
         self,
-        employee_client: EmployeeGRPCClient,
+        employee_repo: EmployeeRepository,
+        org_unit_repo: OrgUnitRepository,
         user_repo: UserRepository,
         role_repo: RoleRepository,
-        org_unit_client: OrgUnitGRPCClient,
     ):
-        self.employee_client = employee_client
+        self.employee_repo = employee_repo
+        self.org_unit_repo = org_unit_repo
         self.user_repo = user_repo
         self.role_repo = role_repo
-        self.org_unit_client = org_unit_client
         self.sso_client = SSOUserGRPCClient()
 
     async def create_employee_with_account(
@@ -68,44 +68,32 @@ class EmployeeAccountService:
     ) -> EmployeeAccountData:
         """
         Create employee with linked SSO user and HRIS user.
-        
-        Flow (idempotent - can resume from failure):
-        1. Check/Create SSO user (critical - user can't login without this)
-        2. Check/Create Employee via gRPC
-        3. Check/Create HRIS user with links
-        
-        Each step auto-links if record already exists.
         """
         warnings = []
         full_name = f"{first_name} {last_name}"
         sso_id = None
         employee_id = None
-        employee_data = None
+        employee_obj = None
         hris_user = None
         temp_password = None
 
         # === STEP 1: SSO User ===
         logger.info(f"Step 1: Check/create SSO user for email: {email}")
         
-        # Check if SSO user exists
         existing_sso = await self.sso_client.get_user_by_email(email)
         
         if existing_sso:
             sso_id = existing_sso["id"]
             logger.info(f"SSO user exists: {sso_id}")
             
-            # Check if already linked to HRIS user with different employee
             existing_hris = await self.user_repo.get_by_sso_id(sso_id)
             if existing_hris and existing_hris.employee_id:
-                # Check if it's the same employee (by email)
-                existing_emp = await self.employee_client.get_employee(existing_hris.employee_id)
-                if existing_emp and existing_emp.get("email") == email:
-                    # Same employee - return existing data (idempotent)
+                existing_emp = await self.employee_repo.get_by_id(existing_hris.employee_id)
+                if existing_emp and existing_emp.email == email:
                     warnings.append("Employee sudah terdaftar sebelumnya")
                     return EmployeeAccountData(
-                        employee=EmployeeResponse(**existing_emp),
+                        employee=EmployeeResponse.model_validate(existing_emp),
                         user=None,
-                        guest_account=None,
                         temporary_password=None,
                         warnings=warnings,
                     )
@@ -114,7 +102,6 @@ class EmployeeAccountService:
                         f"Email {email} sudah terdaftar dan terhubung ke employee lain"
                     )
         else:
-            # Create SSO user
             create_result = await self.sso_client.create_user(
                 email=email,
                 name=full_name,
@@ -130,37 +117,48 @@ class EmployeeAccountService:
             temp_password = create_result.get("temporary_password")
             logger.info(f"SSO user created: {sso_id}")
 
-        # === STEP 2: Employee via gRPC ===
+        # === STEP 2: Employee (Local) ===
         logger.info(f"Step 2: Check/create employee for email: {email}")
         
-        existing_employee = await self.employee_client.get_employee_by_email(email)
+        existing_employee = await self.employee_repo.get_by_email(email)
         
         if existing_employee:
-            employee_id = int(existing_employee["id"])
-            employee_data = existing_employee
+            employee_id = existing_employee.id
+            employee_obj = existing_employee
             logger.info(f"Employee exists: {employee_id}")
             
-            # Check if already linked to different HRIS user
             linked_user = await self.user_repo.get_by_employee_id(employee_id)
             if linked_user and linked_user.sso_id != sso_id:
                 raise ConflictException(
                     f"Employee sudah terhubung ke user SSO lain ({linked_user.sso_id})"
                 )
         else:
-            # Create employee
-            employee_data = await self.employee_client.create_employee(
-                employee_number=number,
-                employee_name=full_name,
-                employee_email=email,
-                employee_phone=phone or "",
-                employee_position=position or "",
+            # Auto-assign supervisor based on org unit
+            auto_supervisor_id = supervisor_id
+            if not auto_supervisor_id and org_unit_id:
+                org_unit = await self.org_unit_repo.get_by_id(org_unit_id)
+                if org_unit and org_unit.head_id:
+                    auto_supervisor_id = org_unit.head_id
+            
+            employee = Employee(
+                number=number,
+                name=full_name,
+                email=email,
+                phone=phone,
+                position=position,
                 employee_type=employee_type,
                 employee_gender=employee_gender,
-                employee_org_unit_id=org_unit_id,
-                created_by=created_by,
-                employee_supervisor_id=supervisor_id,
+                org_unit_id=org_unit_id,
+                supervisor_id=auto_supervisor_id,
+                is_active=True
             )
-            employee_id = int(employee_data["id"])
+            employee.set_created_by(created_by)
+            
+            employee_obj = await self.employee_repo.create(employee)
+            employee_id = employee_obj.id
+            
+            # Reload with relationships
+            employee_obj = await self.employee_repo.get_by_id(employee_id)
             logger.info(f"Employee created: {employee_id}")
 
         # === STEP 3: HRIS User ===
@@ -169,14 +167,12 @@ class EmployeeAccountService:
         hris_user = await self.user_repo.get_by_sso_id(sso_id)
         
         if hris_user:
-            # Update employee link if not set
             if not hris_user.employee_id:
                 await self.user_repo.link_employee(hris_user.id, employee_id, org_unit_id)
                 logger.info(f"HRIS user {hris_user.id} linked to employee {employee_id}")
             else:
                 warnings.append("HRIS user sudah ter-link sebelumnya")
         else:
-            # Create HRIS user
             hris_user = await self.user_repo.create({
                 "sso_id": sso_id,
                 "employee_id": employee_id,
@@ -185,13 +181,11 @@ class EmployeeAccountService:
             })
             logger.info(f"HRIS user created: {hris_user.id}")
 
-        # Assign default role
         await self._assign_default_role(hris_user.id, employee_id)
 
         return EmployeeAccountData(
-            employee=EmployeeResponse(**employee_data),
-            user=None,  # HRIS user data is minimal now
-            guest_account=None,
+            employee=EmployeeResponse.model_validate(employee_obj),
+            user=None,
             temporary_password=temp_password,
             warnings=warnings if warnings else None,
         )
@@ -209,7 +203,6 @@ class EmployeeAccountService:
         employee_type: Optional[str] = None,
         employee_gender: Optional[str] = None,
         supervisor_id: Optional[int] = None,
-        # Profile fields for SSO
         alias: Optional[str] = None,
         gender: Optional[str] = None,
         address: Optional[str] = None,
@@ -218,7 +211,6 @@ class EmployeeAccountService:
         """Update employee and sync to SSO."""
         warnings = []
 
-        # Get HRIS user
         user = await self.user_repo.get(user_id)
         if not user:
             raise NotFoundException(f"User dengan ID {user_id} tidak ditemukan")
@@ -226,40 +218,44 @@ class EmployeeAccountService:
         if not user.employee_id:
             raise ValidationException("User tidak memiliki employee_id")
 
+        employee = await self.employee_repo.get_by_id(user.employee_id)
+        if not employee:
+            raise NotFoundException(f"Employee dengan ID {user.employee_id} tidak ditemukan")
+
         # Build full name if provided
         full_name = None
         if first_name or last_name:
-            # Get existing employee data
-            existing_emp = await self.employee_client.get_employee(user.employee_id)
-            if existing_emp:
-                existing_name = existing_emp.get("name", "")
-                parts = existing_name.split(" ", 1)
-                existing_first = parts[0] if len(parts) > 0 else ""
-                existing_last = parts[1] if len(parts) > 1 else ""
-                
-                fn = first_name if first_name else existing_first
-                ln = last_name if last_name else existing_last
-                full_name = f"{fn} {ln}"
+            existing_name = employee.name or ""
+            parts = existing_name.split(" ", 1)
+            existing_first = parts[0] if len(parts) > 0 else ""
+            existing_last = parts[1] if len(parts) > 1 else ""
+            
+            fn = first_name if first_name else existing_first
+            ln = last_name if last_name else existing_last
+            full_name = f"{fn} {ln}"
 
-        # Update Employee via gRPC
-        employee_data = None
-        if full_name or phone or position or employee_type or employee_gender or org_unit_id or supervisor_id:
-            try:
-                employee_data = await self.employee_client.update_employee(
-                    employee_id=user.employee_id,
-                    updated_by=updated_by,
-                    employee_name=full_name,
-                    employee_phone=phone,
-                    employee_position=position,
-                    employee_type=employee_type,
-                    employee_gender=employee_gender,
-                    employee_org_unit_id=org_unit_id,
-                    employee_supervisor_id=supervisor_id,
-                )
-                logger.info(f"Employee updated: {user.employee_id}")
-            except Exception as e:
-                logger.error(f"Employee update failed: {e}")
-                raise ValidationException(f"Gagal update employee: {e}")
+        # Update Employee
+        if full_name:
+            employee.name = full_name
+        if phone is not None:
+            employee.phone = phone
+        if position is not None:
+            employee.position = position
+        if employee_type is not None:
+            employee.employee_type = employee_type
+        if employee_gender is not None:
+            employee.employee_gender = employee_gender
+        if org_unit_id is not None:
+            employee.org_unit_id = org_unit_id
+        if supervisor_id is not None:
+            employee.supervisor_id = supervisor_id
+        
+        employee.set_updated_by(updated_by)
+        await self.employee_repo.update(employee)
+        
+        # Reload with relationships
+        employee = await self.employee_repo.get_by_id(user.employee_id)
+        logger.info(f"Employee updated: {user.employee_id}")
 
         # Update HRIS user org_unit if changed
         if org_unit_id:
@@ -282,9 +278,8 @@ class EmployeeAccountService:
                 warnings.append(f"SSO sync gagal: {e}")
 
         return EmployeeAccountUpdateData(
-            employee=EmployeeResponse(**employee_data) if employee_data else None,
+            employee=EmployeeResponse.model_validate(employee),
             user=None,
-            guest_account=None,
             updated_fields={"employee": True, "sso": True},
             warnings=warnings if warnings else None,
         )
@@ -316,11 +311,21 @@ class EmployeeAccountService:
         # Soft delete employee
         if user.employee_id:
             try:
-                await self.employee_client.delete_employee(
-                    employee_id=user.employee_id,
-                    deleted_by=deleted_by,
-                )
-                logger.info(f"Employee deleted: {user.employee_id}")
+                is_head = await self.org_unit_repo.is_head_of_any_unit(user.employee_id)
+                if is_head:
+                    warnings.append("Employee is org unit head - reassign before deleting")
+                else:
+                    employee = await self.employee_repo.get_by_id(user.employee_id)
+                    subordinates = await self.employee_repo.get_all_by_supervisor(user.employee_id)
+                    if subordinates:
+                        subordinate_ids = [s.id for s in subordinates]
+                        new_supervisor_id = employee.supervisor_id if employee else None
+                        await self.employee_repo.bulk_update_supervisor(
+                            subordinate_ids, new_supervisor_id, deleted_by
+                        )
+                    
+                    await self.employee_repo.delete(user.employee_id, deleted_by)
+                    logger.info(f"Employee deleted: {user.employee_id}")
             except Exception as e:
                 logger.warning(f"Employee delete failed: {e}")
                 warnings.append(f"Employee delete failed: {e}")
@@ -337,15 +342,24 @@ class EmployeeAccountService:
         if not user:
             raise NotFoundException(f"User dengan ID {user_id} tidak ditemukan")
 
-        # Get SSO user data
         sso_user = None
         if user.sso_id:
             sso_user = await self.sso_client.get_user(user.sso_id)
 
-        # Get employee data
         employee = None
         if user.employee_id:
-            employee = await self.employee_client.get_employee(user.employee_id)
+            emp = await self.employee_repo.get_by_id(user.employee_id)
+            if emp:
+                employee = {
+                    "id": emp.id,
+                    "number": emp.number,
+                    "name": emp.name,
+                    "email": emp.email,
+                    "phone": emp.phone,
+                    "position": emp.position,
+                    "org_unit_id": emp.org_unit_id,
+                    "is_active": emp.is_active,
+                }
 
         return {
             "hris_user": {
@@ -375,11 +389,9 @@ class EmployeeAccountService:
             org_unit_id=org_unit_id,
         )
 
-        # Enrich with SSO data
         items = []
         sso_ids = [u.sso_id for u in result["users"] if u.sso_id]
         
-        # Batch get SSO users
         sso_users = {}
         if sso_ids:
             sso_list = await self.sso_client.batch_get_users(sso_ids)
@@ -404,13 +416,11 @@ class EmployeeAccountService:
     async def _assign_default_role(self, user_id: int, employee_id: int) -> None:
         """Assign default role to user."""
         try:
-            # Employee role
             role = await self.role_repo.get_role_by_name("employee")
             if role:
                 await self.role_repo.assign_role(user_id, role.id)
                 logger.info(f"Employee role assigned to user {user_id}")
 
-            # Check if org unit head
             if await self._is_org_unit_head(employee_id):
                 head_role = await self.role_repo.get_role_by_name("org_unit_head")
                 if head_role:
@@ -421,13 +431,4 @@ class EmployeeAccountService:
 
     async def _is_org_unit_head(self, employee_id: int) -> bool:
         """Check if employee is org unit head."""
-        try:
-            result = await self.org_unit_client.list_org_units(
-                page=1, limit=1000, is_active=True
-            )
-            for org_unit in result.get("org_units", []):
-                if org_unit.get("head_id") == employee_id:
-                    return True
-            return False
-        except Exception:
-            return False
+        return await self.org_unit_repo.is_head_of_any_unit(employee_id)

@@ -1,7 +1,6 @@
 from app.modules.employees.schemas.responses import (
     EmployeeResponse,
     UserNestedResponse,
-    GuestAccountNestedResponse,
     EmployeeAccountData,
     EmployeeAccountUpdateData,
     EmployeeAccountListItem,
@@ -20,7 +19,6 @@ __all__ = [
     # Responses
     "EmployeeResponse",
     "UserNestedResponse",
-    "GuestAccountNestedResponse",
     "EmployeeAccountData",
     "EmployeeAccountUpdateData",
     "EmployeeAccountListItem",

@@ -5,6 +5,7 @@ Create Date: 2024-12-12
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 revision = '001_initial_sso'
@@ -14,6 +15,82 @@ depends_on = None
 
 
 def upgrade() -> None:
+
+    # org_units table - must be created first due to FK from employees
+    op.create_table(
+        'org_units',
+        sa.Column('id', sa.Integer(), nullable=False),
+        sa.Column('code', sa.String(50), nullable=False),
+        sa.Column('name', sa.String(255), nullable=False),
+        sa.Column('type', sa.String(100), nullable=False),
+        sa.Column('parent_id', sa.Integer(), nullable=True),
+        sa.Column('level', sa.Integer(), nullable=False, server_default='1'),
+        sa.Column('path', sa.String(500), nullable=False),
+        sa.Column('head_id', sa.Integer(), nullable=True),  # FK added later
+        sa.Column('description', sa.Text(), nullable=True),
+        sa.Column('metadata', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column('is_active', sa.Boolean(), nullable=False, server_default='true'),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('created_by', sa.Integer(), nullable=True),
+        sa.Column('updated_by', sa.Integer(), nullable=True),
+        sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('deleted_by', sa.Integer(), nullable=True),
+        sa.PrimaryKeyConstraint('id'),
+        sa.ForeignKeyConstraint(['parent_id'], ['org_units.id'], ondelete='SET NULL')
+    )
+    op.create_index('ix_org_units_code', 'org_units', ['code'], unique=True)
+    op.create_index('ix_org_units_type', 'org_units', ['type'])
+    op.create_index('ix_org_units_parent_id', 'org_units', ['parent_id'])
+    op.create_index('ix_org_units_path', 'org_units', ['path'])
+    op.create_index('ix_org_units_is_active', 'org_units', ['is_active'])
+    op.create_index('ix_org_units_deleted_at', 'org_units', ['deleted_at'])
+
+    # employees table
+    op.create_table(
+        'employees',
+        sa.Column('id', sa.Integer(), nullable=False),
+        sa.Column('number', sa.String(50), nullable=False),
+        sa.Column('name', sa.String(255), nullable=False),
+        sa.Column('email', sa.String(255), nullable=True),
+        sa.Column('phone', sa.String(50), nullable=True),
+        sa.Column('position', sa.String(255), nullable=True),
+        sa.Column('employee_type', sa.String(20), nullable=True),
+        sa.Column('employee_gender', sa.String(20), nullable=True),
+        sa.Column('org_unit_id', sa.Integer(), nullable=True),
+        sa.Column('supervisor_id', sa.Integer(), nullable=True),
+        sa.Column('metadata', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column('is_active', sa.Boolean(), nullable=False, server_default='true'),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('created_by', sa.Integer(), nullable=True),
+        sa.Column('updated_by', sa.Integer(), nullable=True),
+        sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('deleted_by', sa.Integer(), nullable=True),
+        sa.PrimaryKeyConstraint('id'),
+        sa.ForeignKeyConstraint(['org_unit_id'], ['org_units.id'], ondelete='SET NULL'),
+        sa.ForeignKeyConstraint(['supervisor_id'], ['employees.id'], ondelete='SET NULL'),
+        sa.CheckConstraint("employee_type IN ('on_site', 'hybrid', 'ho') OR employee_type IS NULL", name='ck_employees_employee_type'),
+        sa.CheckConstraint("employee_gender IN ('male', 'female') OR employee_gender IS NULL", name='ck_employees_employee_gender')
+    )
+    op.create_index('ix_employees_number', 'employees', ['number'], unique=True)
+    op.create_index('ix_employees_email', 'employees', ['email'], unique=True)
+    op.create_index('ix_employees_org_unit_id', 'employees', ['org_unit_id'])
+    op.create_index('ix_employees_supervisor_id', 'employees', ['supervisor_id'])
+    op.create_index('ix_employees_is_active', 'employees', ['is_active'])
+    op.create_index('ix_employees_deleted_at', 'employees', ['deleted_at'])
+    op.create_index('ix_employees_name', 'employees', ['name'])
+
+    # Add head_id FK to org_units (deferred due to circular dependency)
+    op.create_foreign_key(
+        'fk_org_units_head_id',
+        'org_units', 'employees',
+        ['head_id'], ['id'],
+        ondelete='SET NULL'
+    )
+    op.create_index('ix_org_units_head_id', 'org_units', ['head_id'])
+
+
     # Users table - minimal linking data
     op.create_table(
         'users',
@@ -24,7 +101,9 @@ def upgrade() -> None:
         sa.Column('is_active', sa.Boolean(), nullable=False, server_default='true'),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.PrimaryKeyConstraint('id')
+        sa.PrimaryKeyConstraint('id'),
+        sa.ForeignKeyConstraint(['employee_id'], ['employees.id'], ondelete='SET NULL'),
+        sa.ForeignKeyConstraint(['org_unit_id'], ['org_units.id'], ondelete='SET NULL')
     )
     op.create_index('ix_users_sso_id', 'users', ['sso_id'], unique=True)
     op.create_index('ix_users_employee_id', 'users', ['employee_id'], unique=False)
@@ -182,3 +261,9 @@ def downgrade() -> None:
     op.drop_table('permissions')
     op.drop_table('roles')
     op.drop_table('users')
+    
+    # Drop FK constraint first before dropping employees table
+    op.drop_constraint('fk_org_units_head_id', 'org_units', type_='foreignkey')
+    op.drop_table('employees')
+    op.drop_table('org_units')
+

@@ -1,5 +1,10 @@
+"""
+Response schemas untuk OrgUnit operations
+"""
+
 from pydantic import BaseModel
 from typing import Optional, Dict, List
+from datetime import datetime
 
 
 class OrgUnitParentNestedResponse(BaseModel):
@@ -16,7 +21,7 @@ class OrgUnitParentNestedResponse(BaseModel):
 class OrgUnitHeadNestedResponse(BaseModel):
     """Nested head employee data in org unit response"""
     id: int
-    employee_number: str
+    number: str
     name: str
     position: Optional[str] = None
 
@@ -25,7 +30,7 @@ class OrgUnitHeadNestedResponse(BaseModel):
 
 
 class OrgUnitResponse(BaseModel):
-    """Org unit response matching gRPC contract from workforce service"""
+    """Org unit response - field names match model exactly"""
     id: int
     code: str
     name: str
@@ -35,18 +40,17 @@ class OrgUnitResponse(BaseModel):
     level: int
     path: str
     description: Optional[str] = None
-    org_unit_metadata: Optional[Dict[str, str]] = None
+    metadata_: Optional[Dict[str, str]] = None
     is_active: bool = True
-    employee_count: int = 0
-    total_employee_count: int = 0
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     created_by: Optional[int] = None
     updated_by: Optional[int] = None
+    deleted_at: Optional[datetime] = None
+    deleted_by: Optional[int] = None
+    # Nested relationships
     parent: Optional[OrgUnitParentNestedResponse] = None
     head: Optional[OrgUnitHeadNestedResponse] = None
-    deleted_at: Optional[str] = None
-    deleted_by: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -57,7 +61,7 @@ class PaginationInfo(BaseModel):
     page: int
     limit: int
     total_items: int
-    total_pages: int
+    total_pages: int = 0
 
 
 class OrgUnitListResponse(BaseModel):
@@ -72,7 +76,6 @@ class OrgUnitHierarchyItem(BaseModel):
     children: List['OrgUnitHierarchyItem'] = []
 
 
-# For forward reference support
 OrgUnitHierarchyItem.model_rebuild()
 
 

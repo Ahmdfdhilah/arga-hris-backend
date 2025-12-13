@@ -10,6 +10,11 @@ from alembic import context
 from app.config.settings import settings
 from app.config.database import Base
 
+# Import all models so Alembic can discover them for autogenerate
+from app.modules.employees.models.employee import Employee  # noqa: F401
+from app.modules.org_units.models.org_unit import OrgUnit  # noqa: F401
+from app.modules.users.users.models.user import User  # noqa: F401
+
 config = context.config
 
 config.set_main_option("sqlalchemy.url", settings.database_url)
