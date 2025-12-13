@@ -18,7 +18,7 @@ class JWTBearer(HTTPBearer):
     def __init__(self, auto_error: bool = True):
         super(JWTBearer, self).__init__(auto_error=auto_error)
 
-    async def __call__(self, request: Request) -> str:
+    async def __call__(self, request: Request) -> str:  #type: ignore
         credentials: HTTPAuthorizationCredentials | None = await super(
             JWTBearer, self
         ).__call__(request)
@@ -60,7 +60,6 @@ async def get_current_user(
     from app.config.database import get_db
 
     try:
-        # Step 1: Validate token via SSO gRPC
         sso_client = SSOAuthGRPCClient()
         validation_result = await sso_client.validate_token(token)
 
@@ -72,12 +71,10 @@ async def get_current_user(
         if not sso_user:
             raise UnauthorizedException("Token valid tapi data user tidak ditemukan")
 
-        # Extract SSO user data
         sso_id = sso_user.get("id")
         if not sso_id:
             raise UnauthorizedException("Token tidak memiliki identitas pengguna")
-
-        # Step 2: Find or create HRIS user
+        
         db_gen = get_db()
         db = await db_gen.__anext__()
 
@@ -96,27 +93,22 @@ async def get_current_user(
             )
             await db.commit()
 
-        # Check if user is active
         if not user.is_active:
             raise UnauthorizedException("Akun pengguna tidak aktif di HRIS")
 
-        # Step 3: Get HRIS-specific roles and permissions
         user_roles = await role_repo.get_user_roles(user.id)
         user_permissions = await role_repo.get_user_permissions(user.id)
 
-        # Step 4: Build CurrentUser from SSO + HRIS data
         return CurrentUser(
             # HRIS data
             id=user.id,
             employee_id=user.employee_id,
             org_unit_id=user.org_unit_id,
-            # SSO data
             sso_id=sso_id,
             name=sso_user.get("name") or "",
             email=sso_user.get("email"),
             avatar_url=sso_user.get("avatar_url"),
             sso_role=sso_user.get("role", "user"),
-            # HRIS RBAC
             roles=user_roles or [],
             permissions=user_permissions or [],
             is_active=user.is_active,
@@ -142,10 +134,8 @@ async def get_current_user(
 async def _create_hris_user(user_repo, role_repo, employee_client, org_unit_client, sso_id: str, sso_user: dict):
     """Create HRIS user on first login (JIT provisioning)."""
     
-    # Create user with just sso_id
     user = await user_repo.create_from_sso(sso_id=sso_id)
 
-    # Assign default role
     try:
         role = await role_repo.get_role_by_name("employee")
         if role:

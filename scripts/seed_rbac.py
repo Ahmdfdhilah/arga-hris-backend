@@ -13,10 +13,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sqlalchemy import select
-from app.config.database import async_session_maker
+from app.config.database import AsyncSessionLocal
 from app.modules.users.rbac.models.role import Role
 from app.modules.users.rbac.models.permission import Permission
 from app.modules.users.rbac.models.role_permission import RolePermission
+from app.modules.users.rbac.models.user_role import UserRole
+from app.modules.users.users.models.user import User
 
 
 # Default roles
@@ -102,7 +104,7 @@ ROLE_PERMISSIONS = {
 
 async def seed_rbac():
     """Seed roles and permissions."""
-    async with async_session_maker() as session:
+    async with AsyncSessionLocal() as session:
         print("Seeding RBAC...")
         
         # Create roles

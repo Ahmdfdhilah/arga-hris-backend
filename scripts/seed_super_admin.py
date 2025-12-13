@@ -27,7 +27,6 @@ from app.config.settings import settings
 from app.modules.users.users.models.user import User
 from app.modules.users.rbac.models.role import Role
 from app.modules.users.rbac.models.user_role import UserRole
-from app.modules.users.guests.models.guest_account import GuestAccount  # Import untuk resolve relationship
 
 
 def create_super_admin():
@@ -51,11 +50,9 @@ def create_super_admin():
         print("   Silakan set SUPER_ADMIN_SSO_ID di file .env")
         return False
 
-    try:
-        sso_id = int(sso_id)
-    except ValueError:
-        print(f" Error: SUPER_ADMIN_SSO_ID harus berupa angka, tapi diberikan: {sso_id}")
-        return False
+    # Validasi sso_id simple (cek panjang string atau format uuid kalau perlu)
+    if len(str(sso_id)) < 30:
+         print(f" Warning: SUPER_ADMIN_SSO_ID terlihat pendek ({sso_id}), pastikan ini UUID yang valid.")
 
     # Create database engine and session (use sync database URL)
     database_url = settings.sync_database_url
@@ -64,16 +61,12 @@ def create_super_admin():
     with Session(engine) as session:
         try:
             # Check if super admin already exists
-            existing_user = session.query(User).filter(
-                (User.email == email) | (User.sso_id == sso_id)
-            ).first()
+            existing_user = session.query(User).filter(User.sso_id == str(sso_id)).first()
 
             if existing_user:
                 print(f"⚠️  Super admin sudah ada:")
                 print(f"   - ID: {existing_user.id}")
-                print(f"   - Email: {existing_user.email}")
                 print(f"   - SSO ID: {existing_user.sso_id}")
-                print(f"   - Name: {existing_user.full_name}")
 
                 # Check if user has super_admin role
                 super_admin_role = session.query(Role).filter(Role.name == "super_admin").first()
@@ -113,11 +106,7 @@ def create_super_admin():
             print(f"   - Name: {first_name} {last_name}")
 
             new_user = User(
-                email=email,
-                sso_id=sso_id,
-                first_name=first_name,
-                last_name=last_name,
-                account_type="regular",
+                sso_id=str(sso_id),
                 is_active=True
             )
             session.add(new_user)
@@ -131,9 +120,7 @@ def create_super_admin():
 
             print(f"\n Super admin berhasil dibuat!")
             print(f"   - User ID: {new_user.id}")
-            print(f"   - Email: {new_user.email}")
             print(f"   - SSO ID: {new_user.sso_id}")
-            print(f"   - Name: {new_user.full_name}")
             print(f"   - Role: super_admin")
             print(f"\n💡 User ini sudah bisa login menggunakan SSO dengan email: {email}")
 

@@ -13,7 +13,6 @@ from app.core.scheduler.manager import init_scheduler
 from app.modules.scheduled_jobs.repositories.job_execution_repository import JobExecutionRepository
 from app.modules.scheduled_jobs.services.job_management_service import JobManagementService
 
-# Import semua job implementations
 from app.modules.scheduled_jobs.jobs.auto_create_daily_attendance import AutoCreateDailyAttendanceJob
 from app.modules.scheduled_jobs.jobs.mark_invalid_no_checkout import MarkInvalidNoCheckoutJob
 
@@ -28,8 +27,6 @@ async def setup_scheduler():
     try:
         logger.info("Initializing scheduler...")
         
-        # Gunakan existing Redis client dari config
-        # Ping Redis untuk ensure connection
         await redis_client.ping()
         logger.info("Redis connection established untuk scheduler")
         
