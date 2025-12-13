@@ -39,6 +39,13 @@ async def lifespan(app: FastAPI):
     """
     Lifecycle manager untuk startup dan shutdown events.
     """
+    # Import event handlers to register them
+    import app.modules.users.users.events  # noqa: F401 - registers handlers
+    
+    from app.core.messaging.consumer import EventConsumer, EventHandlerRegistry
+    
+    consumer = None
+    
     # Startup: Scheduler
     await setup_scheduler()
     
@@ -47,10 +54,30 @@ async def lifespan(app: FastAPI):
         await rabbitmq_manager.connect()
         await rabbitmq_manager.setup_exchanges_and_queues()
         logger.info("RabbitMQ initialized successfully")
+        
+        # Log registered handlers
+        all_handlers = EventHandlerRegistry.list_all()
+        if all_handlers:
+            logger.info("Registered event handlers:")
+            for event_type, handlers in all_handlers.items():
+                logger.info(f"  {event_type} → {', '.join(handlers)}")
+        
+        # Start event consumer in background
+        consumer = EventConsumer(rabbitmq_manager, service_name="hris")
+        consumer.start_background("hris.events", prefetch_count=10)
+        logger.info("Event consumer started in background")
+        
     except Exception as e:
-        logger.warning(f"RabbitMQ initialization failed: {e}. Events will not be published.")
+        logger.warning(f"RabbitMQ initialization failed: {e}. Events will not be consumed.")
 
     yield
+
+    # Shutdown: Event consumer
+    if consumer:
+        try:
+            await consumer.stop()
+        except Exception as e:
+            logger.warning(f"Event consumer stop error: {e}")
 
     # Shutdown: RabbitMQ
     try:
