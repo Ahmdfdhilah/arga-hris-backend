@@ -2,15 +2,16 @@
 Employee Repository - Database operations for Employee model
 
 Full-featured repository with CRUD, search, hierarchy queries, and soft delete support.
+Now includes User relationship for profile data.
 """
 
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, func, or_, and_, text
-from sqlalchemy.orm import selectinload
-from datetime import datetime
+from sqlalchemy.orm import selectinload, joinedload
 from app.core.utils.datetime import get_utc_now
 from app.modules.employees.models.employee import Employee
+from app.modules.users.users.models.user import User
 
 
 class EmployeeFilters:
@@ -44,7 +45,7 @@ class PaginationResult:
         self.total_items = total_items
         self.total_pages = (total_items + limit - 1) // limit if limit > 0 else 0
     
-    def to_dict(self) -> Dict[str, int]:
+    def to_dict(self) -> dict:
         return {
             "page": self.page,
             "limit": self.limit,
@@ -59,6 +60,14 @@ class EmployeeRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    def _base_options(self):
+        """Standard options for loading relationships"""
+        return [
+            selectinload(Employee.user),
+            selectinload(Employee.org_unit),
+            selectinload(Employee.supervisor).selectinload(Employee.user),
+        ]
+
     async def create(self, employee: Employee) -> Employee:
         """Create a new employee"""
         self.db.add(employee)
@@ -70,10 +79,7 @@ class EmployeeRepository:
         """Get employee by ID with relationships loaded"""
         result = await self.db.execute(
             select(Employee)
-            .options(
-                selectinload(Employee.org_unit),
-                selectinload(Employee.supervisor)
-            )
+            .options(*self._base_options())
             .where(
                 and_(
                     Employee.id == employee_id,
@@ -87,11 +93,22 @@ class EmployeeRepository:
         """Get employee by ID including soft-deleted"""
         result = await self.db.execute(
             select(Employee)
-            .options(
-                selectinload(Employee.org_unit),
-                selectinload(Employee.supervisor)
-            )
+            .options(*self._base_options())
             .where(Employee.id == employee_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_by_user_id(self, user_id: int) -> Optional[Employee]:
+        """Get employee by user ID"""
+        result = await self.db.execute(
+            select(Employee)
+            .options(*self._base_options())
+            .where(
+                and_(
+                    Employee.user_id == user_id,
+                    Employee.deleted_at.is_(None)
+                )
+            )
         )
         return result.scalar_one_or_none()
 
@@ -99,10 +116,7 @@ class EmployeeRepository:
         """Get employee by employee number"""
         result = await self.db.execute(
             select(Employee)
-            .options(
-                selectinload(Employee.org_unit),
-                selectinload(Employee.supervisor)
-            )
+            .options(*self._base_options())
             .where(
                 and_(
                     Employee.number == number,
@@ -113,16 +127,14 @@ class EmployeeRepository:
         return result.scalar_one_or_none()
 
     async def get_by_email(self, email: str) -> Optional[Employee]:
-        """Get employee by email"""
+        """Get employee by email (via user)"""
         result = await self.db.execute(
             select(Employee)
-            .options(
-                selectinload(Employee.org_unit),
-                selectinload(Employee.supervisor)
-            )
+            .join(User, Employee.user_id == User.id)
+            .options(*self._base_options())
             .where(
                 and_(
-                    Employee.email == email,
+                    User.email == email,
                     Employee.deleted_at.is_(None)
                 )
             )
@@ -178,52 +190,45 @@ class EmployeeRepository:
     ) -> Tuple[List[Employee], PaginationResult]:
         """List employees with filters and pagination"""
         query = select(Employee).where(Employee.deleted_at.is_(None))
+        count_query = select(func.count(Employee.id)).where(Employee.deleted_at.is_(None))
         
         if filters.org_unit_id is not None:
             query = query.where(Employee.org_unit_id == filters.org_unit_id)
+            count_query = count_query.where(Employee.org_unit_id == filters.org_unit_id)
         
         if filters.is_active is not None:
             query = query.where(Employee.is_active == filters.is_active)
+            count_query = count_query.where(Employee.is_active == filters.is_active)
         
         if filters.search:
             search_pattern = f"%{filters.search}%"
-            query = query.where(
+            # Join with User for name/email search
+            query = query.outerjoin(User, Employee.user_id == User.id).where(
                 or_(
-                    Employee.name.ilike(search_pattern),
-                    Employee.email.ilike(search_pattern),
+                    User.name.ilike(search_pattern),
+                    User.email.ilike(search_pattern),
+                    Employee.number.ilike(search_pattern)
+                )
+            )
+            count_query = count_query.outerjoin(User, Employee.user_id == User.id).where(
+                or_(
+                    User.name.ilike(search_pattern),
+                    User.email.ilike(search_pattern),
                     Employee.number.ilike(search_pattern)
                 )
             )
         
         # Count total
-        count_query = select(func.count(Employee.id)).where(Employee.deleted_at.is_(None))
-        if filters.org_unit_id is not None:
-            count_query = count_query.where(Employee.org_unit_id == filters.org_unit_id)
-        if filters.is_active is not None:
-            count_query = count_query.where(Employee.is_active == filters.is_active)
-        if filters.search:
-            search_pattern = f"%{filters.search}%"
-            count_query = count_query.where(
-                or_(
-                    Employee.name.ilike(search_pattern),
-                    Employee.email.ilike(search_pattern),
-                    Employee.number.ilike(search_pattern)
-                )
-            )
-        
         total_result = await self.db.execute(count_query)
         total = total_result.scalar_one()
         
         # Add pagination and load relationships
         if include_details:
-            query = query.options(
-                selectinload(Employee.org_unit),
-                selectinload(Employee.supervisor)
-            )
+            query = query.options(*self._base_options())
         
         query = query.offset(params.get_offset()).limit(params.limit)
         result = await self.db.execute(query)
-        employees = list(result.scalars().all())
+        employees = list(result.scalars().unique().all())
         
         pagination = PaginationResult(params.page, params.limit, total)
         return employees, pagination
@@ -235,25 +240,21 @@ class EmployeeRepository:
     ) -> Tuple[List[Employee], PaginationResult]:
         """List soft-deleted employees"""
         query = select(Employee).where(Employee.deleted_at.is_not(None))
+        count_query = select(func.count(Employee.id)).where(Employee.deleted_at.is_not(None))
         
         if search:
             search_pattern = f"%{search}%"
-            query = query.where(
+            query = query.outerjoin(User, Employee.user_id == User.id).where(
                 or_(
-                    Employee.name.ilike(search_pattern),
-                    Employee.email.ilike(search_pattern),
+                    User.name.ilike(search_pattern),
+                    User.email.ilike(search_pattern),
                     Employee.number.ilike(search_pattern)
                 )
             )
-        
-        # Count total
-        count_query = select(func.count(Employee.id)).where(Employee.deleted_at.is_not(None))
-        if search:
-            search_pattern = f"%{search}%"
-            count_query = count_query.where(
+            count_query = count_query.outerjoin(User, Employee.user_id == User.id).where(
                 or_(
-                    Employee.name.ilike(search_pattern),
-                    Employee.email.ilike(search_pattern),
+                    User.name.ilike(search_pattern),
+                    User.email.ilike(search_pattern),
                     Employee.number.ilike(search_pattern)
                 )
             )
@@ -261,13 +262,12 @@ class EmployeeRepository:
         total_result = await self.db.execute(count_query)
         total = total_result.scalar_one()
         
-        query = query.options(
-            selectinload(Employee.org_unit),
-            selectinload(Employee.supervisor)
-        ).offset(params.get_offset()).limit(params.limit).order_by(Employee.deleted_at.desc())
+        query = query.options(*self._base_options()).offset(
+            params.get_offset()
+        ).limit(params.limit).order_by(Employee.deleted_at.desc())
         
         result = await self.db.execute(query)
-        employees = list(result.scalars().all())
+        employees = list(result.scalars().unique().all())
         
         pagination = PaginationResult(params.page, params.limit, total)
         return employees, pagination
@@ -306,7 +306,7 @@ class EmployeeRepository:
                     INNER JOIN subordinates s ON e.supervisor_id = s.id
                     WHERE e.deleted_at IS NULL
                 )
-                SELECT * FROM subordinates
+                SELECT id FROM subordinates
                 LIMIT :limit OFFSET :offset
             """)
             
@@ -320,19 +320,17 @@ class EmployeeRepository:
             )
             rows = result.fetchall()
             
-            # Convert rows to Employee objects
-            employee_ids = [row[0] for row in rows]  # id is first column
+            employee_ids = [row[0] for row in rows]
             if employee_ids:
                 employees_result = await self.db.execute(
                     select(Employee)
-                    .options(selectinload(Employee.org_unit))
+                    .options(*self._base_options())
                     .where(Employee.id.in_(employee_ids))
                 )
-                employees = list(employees_result.scalars().all())
+                employees = list(employees_result.scalars().unique().all())
             else:
                 employees = []
         else:
-            # Simple direct subordinates query
             count_query = select(func.count(Employee.id)).where(
                 and_(
                     Employee.supervisor_id == supervisor_id,
@@ -342,9 +340,7 @@ class EmployeeRepository:
             total_result = await self.db.execute(count_query)
             total = total_result.scalar_one()
             
-            query = select(Employee).options(
-                selectinload(Employee.org_unit)
-            ).where(
+            query = select(Employee).options(*self._base_options()).where(
                 and_(
                     Employee.supervisor_id == supervisor_id,
                     Employee.deleted_at.is_(None)
@@ -352,7 +348,7 @@ class EmployeeRepository:
             ).offset(params.get_offset()).limit(params.limit)
             
             result = await self.db.execute(query)
-            employees = list(result.scalars().all())
+            employees = list(result.scalars().unique().all())
         
         pagination = PaginationResult(params.page, params.limit, total)
         return employees, pagination
@@ -368,7 +364,6 @@ class EmployeeRepository:
             params = PaginationParams()
         
         if include_children:
-            # Get org unit path and query all employees in subtree
             from app.modules.org_units.models.org_unit import OrgUnit
             
             org_unit_result = await self.db.execute(
@@ -379,7 +374,6 @@ class EmployeeRepository:
             if not org_unit:
                 return [], PaginationResult(params.page, params.limit, 0)
             
-            # Query employees where org_unit path starts with this unit's path
             count_query = text("""
                 SELECT COUNT(e.id) 
                 FROM employees e
@@ -389,10 +383,7 @@ class EmployeeRepository:
             total_result = await self.db.execute(count_query, {"path_pattern": f"{org_unit.path}%"})
             total = total_result.scalar_one()
             
-            query = select(Employee).options(
-                selectinload(Employee.org_unit),
-                selectinload(Employee.supervisor)
-            ).join(
+            query = select(Employee).options(*self._base_options()).join(
                 OrgUnit, Employee.org_unit_id == OrgUnit.id
             ).where(
                 and_(
@@ -402,9 +393,8 @@ class EmployeeRepository:
             ).offset(params.get_offset()).limit(params.limit)
             
             result = await self.db.execute(query)
-            employees = list(result.scalars().all())
+            employees = list(result.scalars().unique().all())
         else:
-            # Simple query for specific org unit
             count_query = select(func.count(Employee.id)).where(
                 and_(
                     Employee.org_unit_id == org_unit_id,
@@ -414,10 +404,7 @@ class EmployeeRepository:
             total_result = await self.db.execute(count_query)
             total = total_result.scalar_one()
             
-            query = select(Employee).options(
-                selectinload(Employee.org_unit),
-                selectinload(Employee.supervisor)
-            ).where(
+            query = select(Employee).options(*self._base_options()).where(
                 and_(
                     Employee.org_unit_id == org_unit_id,
                     Employee.deleted_at.is_(None)
@@ -425,7 +412,7 @@ class EmployeeRepository:
             ).offset(params.get_offset()).limit(params.limit)
             
             result = await self.db.execute(query)
-            employees = list(result.scalars().all())
+            employees = list(result.scalars().unique().all())
         
         pagination = PaginationResult(params.page, params.limit, total)
         return employees, pagination
@@ -434,7 +421,7 @@ class EmployeeRepository:
         """Get all direct subordinates (no pagination, for bulk operations)"""
         result = await self.db.execute(
             select(Employee)
-            .options(selectinload(Employee.org_unit))
+            .options(*self._base_options())
             .where(
                 and_(
                     Employee.supervisor_id == supervisor_id,
@@ -442,7 +429,7 @@ class EmployeeRepository:
                 )
             )
         )
-        return list(result.scalars().all())
+        return list(result.scalars().unique().all())
 
     async def bulk_update_supervisor(
         self,
@@ -482,13 +469,10 @@ class EmployeeRepository:
         
         result = await self.db.execute(
             select(Employee)
-            .options(
-                selectinload(Employee.org_unit),
-                selectinload(Employee.supervisor)
-            )
+            .options(*self._base_options())
             .where(Employee.id.in_(ids))
         )
-        return list(result.scalars().all())
+        return list(result.scalars().unique().all())
 
     async def count(self, filters: EmployeeFilters) -> int:
         """Count employees with filters"""
@@ -502,10 +486,10 @@ class EmployeeRepository:
         
         if filters.search:
             search_pattern = f"%{filters.search}%"
-            query = query.where(
+            query = query.outerjoin(User, Employee.user_id == User.id).where(
                 or_(
-                    Employee.name.ilike(search_pattern),
-                    Employee.email.ilike(search_pattern),
+                    User.name.ilike(search_pattern),
+                    User.email.ilike(search_pattern),
                     Employee.number.ilike(search_pattern)
                 )
             )

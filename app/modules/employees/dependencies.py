@@ -2,11 +2,11 @@
 Employee Module Dependencies - Refactored for Local Repository
 
 Uses local SQLAlchemy repositories instead of gRPC clients for master data.
+Includes event publishing to RabbitMQ.
 """
 
 from typing import Annotated
 from fastapi import Depends
-from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies.database import PostgresDB
 from app.modules.employees.repositories.employee_repository import EmployeeRepository
 from app.modules.org_units.repositories.org_unit_repository import OrgUnitRepository
@@ -14,6 +14,7 @@ from app.modules.employees.services.employee_service import EmployeeService
 from app.modules.employees.services.employee_account_service import EmployeeAccountService
 from app.modules.users.users.repositories.user_repository import UserRepository
 from app.modules.users.rbac.repositories.role_repository import RoleRepository
+from app.core.messaging.event_publisher import EventPublisher, event_publisher
 
 
 # ===========================================
@@ -53,16 +54,29 @@ RoleRepositoryDep = Annotated[RoleRepository, Depends(get_role_repository)]
 
 
 # ===========================================
+# Event Publisher
+# ===========================================
+
+def get_event_publisher() -> EventPublisher:
+    """Get Event publisher instance"""
+    return event_publisher
+
+
+EventPublisherDep = Annotated[EventPublisher, Depends(get_event_publisher)]
+
+
+# ===========================================
 # Services
 # ===========================================
 
 def get_employee_service(
     employee_repo: EmployeeRepositoryDep,
     org_unit_repo: OrgUnitRepositoryDep,
-    user_repo: UserRepositoryDep
+    user_repo: UserRepositoryDep,
+    publisher: EventPublisherDep,
 ) -> EmployeeService:
-    """Get Employee service instance with local repositories"""
-    return EmployeeService(employee_repo, org_unit_repo, user_repo)
+    """Get Employee service instance with local repositories and event publisher"""
+    return EmployeeService(employee_repo, org_unit_repo, user_repo, publisher)
 
 
 EmployeeServiceDep = Annotated[EmployeeService, Depends(get_employee_service)]
@@ -73,10 +87,11 @@ def get_employee_account_service(
     org_unit_repo: OrgUnitRepositoryDep,
     user_repo: UserRepositoryDep,
     role_repo: RoleRepositoryDep,
+    publisher: EventPublisherDep,
 ) -> EmployeeAccountService:
-    """Get Employee Account service instance"""
+    """Get Employee Account service instance with event publisher"""
     return EmployeeAccountService(
-        employee_repo, org_unit_repo, user_repo, role_repo
+        employee_repo, org_unit_repo, user_repo, role_repo, publisher
     )
 
 

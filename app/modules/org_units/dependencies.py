@@ -2,6 +2,7 @@
 OrgUnit Module Dependencies - Refactored for Local Repository
 
 Uses local SQLAlchemy repositories instead of gRPC clients for master data.
+Includes event publishing to RabbitMQ.
 """
 
 from typing import Annotated
@@ -10,6 +11,7 @@ from app.core.dependencies.database import PostgresDB
 from app.modules.org_units.repositories.org_unit_repository import OrgUnitRepository
 from app.modules.employees.repositories.employee_repository import EmployeeRepository
 from app.modules.org_units.services.org_unit_service import OrgUnitService
+from app.core.messaging.event_publisher import EventPublisher, event_publisher
 
 
 # ===========================================
@@ -33,15 +35,28 @@ EmployeeRepositoryDep = Annotated[EmployeeRepository, Depends(get_employee_repos
 
 
 # ===========================================
+# Event Publisher
+# ===========================================
+
+def get_event_publisher() -> EventPublisher:
+    """Get Event publisher instance"""
+    return event_publisher
+
+
+EventPublisherDep = Annotated[EventPublisher, Depends(get_event_publisher)]
+
+
+# ===========================================
 # Services
 # ===========================================
 
 def get_org_unit_service(
     org_unit_repo: OrgUnitRepositoryDep,
-    employee_repo: EmployeeRepositoryDep
+    employee_repo: EmployeeRepositoryDep,
+    publisher: EventPublisherDep,
 ) -> OrgUnitService:
-    """Get OrgUnit service instance with local repositories"""
-    return OrgUnitService(org_unit_repo, employee_repo)
+    """Get OrgUnit service instance with local repositories and event publisher"""
+    return OrgUnitService(org_unit_repo, employee_repo, publisher)
 
 
 OrgUnitServiceDep = Annotated[OrgUnitService, Depends(get_org_unit_service)]

@@ -165,7 +165,6 @@ async def _create_hris_user(user_repo, role_repo, employee_client, org_unit_clie
     except Exception as e:
         logger.warning(f"Failed to assign role to user {user.id}: {str(e)}")
 
-    # Try to auto-link to employee by email from SSO
     email = sso_user.get("email")
     if email:
         try:

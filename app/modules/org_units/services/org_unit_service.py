@@ -1,10 +1,12 @@
 """
 OrgUnit Service - Business logic for Organization Unit operations
 
-Uses local repository for master data.
+Uses local repository for master data and publishes events to RabbitMQ.
 """
 
 from typing import Optional, List, Tuple, Dict, Any
+import logging
+
 from app.modules.org_units.models.org_unit import OrgUnit
 from app.modules.org_units.repositories.org_unit_repository import (
     OrgUnitRepository,
@@ -21,6 +23,9 @@ from app.modules.org_units.schemas.responses import (
 )
 from app.modules.org_units.schemas.requests import OrgUnitBulkItem
 from app.core.exceptions import NotFoundException, ConflictException, BadRequestException
+from app.core.messaging.event_publisher import EventPublisher
+
+logger = logging.getLogger(__name__)
 
 
 class OrgUnitService:
@@ -29,10 +34,42 @@ class OrgUnitService:
     def __init__(
         self,
         org_unit_repo: OrgUnitRepository,
-        employee_repo: Optional[EmployeeRepository] = None
+        employee_repo: Optional[EmployeeRepository] = None,
+        event_publisher: Optional[EventPublisher] = None,
     ):
         self.org_unit_repo = org_unit_repo
         self.employee_repo = employee_repo
+        self.event_publisher = event_publisher
+
+    def _org_unit_to_event_data(self, org_unit: OrgUnit) -> Dict[str, Any]:
+        """Convert org unit to event data dict"""
+        return {
+            "id": org_unit.id,
+            "code": org_unit.code,
+            "name": org_unit.name,
+            "type": org_unit.type,
+            "parent_id": org_unit.parent_id,
+            "head_id": org_unit.head_id,
+            "level": org_unit.level,
+            "path": org_unit.path,
+            "is_active": org_unit.is_active,
+        }
+
+    async def _publish_event(self, event_type: str, org_unit: OrgUnit) -> None:
+        """Publish org unit event if publisher available"""
+        if not self.event_publisher:
+            return
+        
+        try:
+            data = self._org_unit_to_event_data(org_unit)
+            if event_type == "created":
+                await self.event_publisher.publish_org_unit_created(org_unit.id, data)
+            elif event_type == "updated":
+                await self.event_publisher.publish_org_unit_updated(org_unit.id, data)
+            elif event_type == "deleted":
+                await self.event_publisher.publish_org_unit_deleted(org_unit.id, data)
+        except Exception as e:
+            logger.warning(f"Failed to publish org_unit.{event_type} event: {e}")
 
     async def get_org_unit(self, org_unit_id: int) -> OrgUnitResponse:
         """Get organization unit by ID"""
@@ -201,6 +238,10 @@ class OrgUnitService:
         
         # Reload with relationships
         created = await self.org_unit_repo.get_by_id(created.id)
+        
+        # Publish event
+        await self._publish_event("created", created)
+        
         return OrgUnitResponse.model_validate(created)
 
     async def update_org_unit(
@@ -269,6 +310,10 @@ class OrgUnitService:
         
         # Reload with relationships
         updated = await self.org_unit_repo.get_by_id(org_unit_id)
+        
+        # Publish event
+        await self._publish_event("updated", updated)
+        
         return OrgUnitResponse.model_validate(updated)
 
     async def _handle_head_change(
@@ -374,6 +419,10 @@ class OrgUnitService:
         
         # Get updated org unit
         deleted_ou = await self.org_unit_repo.get_by_id_with_deleted(org_unit_id)
+        
+        # Publish event
+        await self._publish_event("deleted", deleted_ou)
+        
         return OrgUnitResponse.model_validate(deleted_ou)
 
     async def restore_org_unit(self, org_unit_id: int) -> OrgUnitResponse:
@@ -392,6 +441,10 @@ class OrgUnitService:
                 raise BadRequestException("Cannot restore: parent unit is still deleted")
         
         restored = await self.org_unit_repo.restore(org_unit_id)
+        
+        # Publish event (restored = updated)
+        await self._publish_event("updated", restored)
+        
         return OrgUnitResponse.model_validate(restored)
 
     async def list_deleted_org_units(

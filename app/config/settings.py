@@ -21,6 +21,13 @@ class Settings(BaseSettings):
     REDIS_PASSWORD: str = ""
     REDIS_DB: int = 0
 
+    # RabbitMQ
+    RABBITMQ_HOST: str = Field(default="localhost")
+    RABBITMQ_PORT: int = Field(default=5672)
+    RABBITMQ_USER: str = Field(default="guest")
+    RABBITMQ_PASSWORD: str = Field(default="guest")
+    RABBITMQ_VHOST: str = Field(default="/")
+
     GCP_CREDENTIALS_PATH: str = Field(
         default="app/credentials/gcp/your-gcp-credentials.json"
     )

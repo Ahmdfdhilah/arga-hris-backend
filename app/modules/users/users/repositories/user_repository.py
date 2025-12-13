@@ -1,8 +1,14 @@
-"""User Repository - Simplified for SSO integration"""
+"""
+User Repository - Profile data replica from SSO
+
+Stores user profile data synced from SSO Master.
+Employee relationship is now the other direction: Employee.user_id → User.id
+"""
 
 from typing import Optional, Dict, Any, List
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, or_
+from datetime import datetime
 from app.core.repositories.base_repository import BaseRepository
 from app.modules.users.users.models.user import User
 
@@ -15,29 +21,67 @@ class UserRepository(BaseRepository[User]):
         """Get user by SSO ID (UUID string)."""
         return await self.get_by(sso_id=sso_id)
 
-    async def get_by_employee_id(self, employee_id: int) -> Optional[User]:
-        """Get user by employee ID."""
-        return await self.get_by(employee_id=employee_id)
+    async def get_by_email(self, email: str) -> Optional[User]:
+        """Get user by email."""
+        return await self.get_by(email=email)
 
-    async def create_from_sso(self, sso_id: str, employee_id: Optional[int] = None) -> User:
-        """Create user from SSO login."""
+    async def create_from_sso_response(
+        self,
+        sso_id: str,
+        name: str,
+        email: Optional[str] = None,
+        phone: Optional[str] = None,
+        gender: Optional[str] = None,
+        avatar_path: Optional[str] = None,
+    ) -> User:
+        """Create user from SSO response data (immediate sync)."""
         user_data = {
             "sso_id": sso_id,
-            "employee_id": employee_id,
+            "name": name,
+            "email": email,
+            "phone": phone,
+            "gender": gender,
+            "avatar_path": avatar_path,
             "is_active": True,
+            "synced_at": datetime.utcnow(),
         }
         return await self.create(user_data)
 
-    async def link_employee(self, user_id: int, employee_id: int, org_unit_id: Optional[int] = None) -> Optional[User]:
-        """Link user to employee."""
-        update_data = {"employee_id": employee_id}
-        if org_unit_id:
-            update_data["org_unit_id"] = org_unit_id
-        return await self.update(user_id, update_data)
-
-    async def unlink_employee(self, user_id: int) -> Optional[User]:
-        """Unlink user from employee."""
-        return await self.update(user_id, {"employee_id": None, "org_unit_id": None})
+    async def sync_from_sso(
+        self,
+        sso_id: str,
+        name: Optional[str] = None,
+        email: Optional[str] = None,
+        phone: Optional[str] = None,
+        gender: Optional[str] = None,
+        avatar_path: Optional[str] = None,
+    ) -> User:
+        """
+        Sync user from SSO - upsert operation.
+        Creates if not exists, updates if exists.
+        """
+        existing = await self.get_by_sso_id(sso_id)
+        
+        update_data = {"synced_at": datetime.utcnow()}
+        if name is not None:
+            update_data["name"] = name
+        if email is not None:
+            update_data["email"] = email
+        if phone is not None:
+            update_data["phone"] = phone
+        if gender is not None:
+            update_data["gender"] = gender
+        if avatar_path is not None:
+            update_data["avatar_path"] = avatar_path
+        
+        if existing:
+            return await self.update(existing.id, update_data)
+        else:
+            update_data["sso_id"] = sso_id
+            update_data["is_active"] = True
+            if name is None:
+                update_data["name"] = ""  # Required field
+            return await self.create(update_data)
 
     async def deactivate(self, user_id: int) -> Optional[User]:
         """Deactivate user."""
@@ -52,8 +96,7 @@ class UserRepository(BaseRepository[User]):
         page: int = 1,
         limit: int = 10,
         is_active: Optional[bool] = None,
-        has_employee: Optional[bool] = None,
-        org_unit_id: Optional[int] = None,
+        search: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Get paginated list of users."""
         offset = (page - 1) * limit
@@ -66,14 +109,14 @@ class UserRepository(BaseRepository[User]):
         if is_active is not None:
             filters.append(User.is_active == is_active)
 
-        if has_employee is not None:
-            if has_employee:
-                filters.append(User.employee_id.isnot(None))
-            else:
-                filters.append(User.employee_id.is_(None))
-
-        if org_unit_id is not None:
-            filters.append(User.org_unit_id == org_unit_id)
+        if search:
+            search_pattern = f"%{search}%"
+            filters.append(
+                or_(
+                    User.name.ilike(search_pattern),
+                    User.email.ilike(search_pattern),
+                )
+            )
 
         if filters:
             stmt = stmt.where(and_(*filters))
@@ -101,6 +144,23 @@ class UserRepository(BaseRepository[User]):
 
     async def get_by_sso_ids(self, sso_ids: List[str]) -> List[User]:
         """Get users by multiple SSO IDs."""
+        if not sso_ids:
+            return []
         stmt = select(User).where(User.sso_id.in_(sso_ids))
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
+
+    async def get_users_needing_sync(self, older_than_hours: int = 24) -> List[User]:
+        """Get users that haven't been synced recently."""
+        from datetime import timedelta
+        threshold = datetime.utcnow() - timedelta(hours=older_than_hours)
+        
+        stmt = select(User).where(
+            or_(
+                User.synced_at.is_(None),
+                User.synced_at < threshold
+            )
+        ).where(User.is_active == True)
+        
         result = await self.db.execute(stmt)
         return list(result.scalars().all())

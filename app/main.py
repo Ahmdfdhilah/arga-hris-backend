@@ -26,8 +26,12 @@ from app.modules.work_submissions.routers import work_submissions
 from app.modules.scheduled_jobs.routers import scheduled_jobs
 from app.modules.dashboard.routers import dashboard
 from app.tasks.scheduler_startup import setup_scheduler, shutdown_scheduler
+from app.core.messaging.rabbitmq import rabbitmq_manager
+import logging
 
 setup_logging()
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -35,10 +39,25 @@ async def lifespan(app: FastAPI):
     """
     Lifecycle manager untuk startup dan shutdown events.
     """
+    # Startup: Scheduler
     await setup_scheduler()
+    
+    # Startup: RabbitMQ
+    try:
+        await rabbitmq_manager.connect()
+        await rabbitmq_manager.setup_exchanges_and_queues()
+        logger.info("RabbitMQ initialized successfully")
+    except Exception as e:
+        logger.warning(f"RabbitMQ initialization failed: {e}. Events will not be published.")
 
     yield
 
+    # Shutdown: RabbitMQ
+    try:
+        await rabbitmq_manager.disconnect()
+    except Exception as e:
+        logger.warning(f"RabbitMQ disconnect error: {e}")
+    
     # Shutdown: Stop scheduler
     await shutdown_scheduler()
 

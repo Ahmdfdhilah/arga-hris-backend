@@ -1,8 +1,9 @@
 """
-Employee Model - Employee master data
+Employee Model - Employment data
 
-Represents employee information with organizational relationships.
-This is the master data, owned by HRIS.
+Represents employee employment information with organizational relationships.
+Profile data (name, email, phone, gender) is stored in User table.
+This table focuses on employment-specific data.
 """
 
 from sqlalchemy import String, Integer, Boolean, ForeignKey, Index, CheckConstraint
@@ -15,21 +16,33 @@ from app.core.models.base_model import TimestampMixin
 
 if TYPE_CHECKING:
     from app.modules.org_units.models.org_unit import OrgUnit
+    from app.modules.users.users.models.user import User
 
 
 class Employee(Base, TimestampMixin):
-    """Employee model with organizational relationships"""
+    """Employee model - employment data with user profile link"""
     
     __tablename__ = "employees"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    
+    # Link to user profile (one-to-one)
+    user_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        unique=True,
+        nullable=True,
+        index=True
+    )
+    
+    # Employee identification
     number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    email: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True, index=True)
-    phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    
+    # Employment data
     position: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    employee_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    employee_gender: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # on_site, hybrid, ho
+    
+    # Organization structure
     org_unit_id: Mapped[Optional[int]] = mapped_column(
         Integer, 
         ForeignKey("org_units.id", ondelete="SET NULL"), 
@@ -42,6 +55,8 @@ class Employee(Base, TimestampMixin):
         nullable=True, 
         index=True
     )
+    
+    # Additional data
     metadata_: Mapped[Optional[dict]] = mapped_column("metadata", JSONB, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
     
@@ -52,6 +67,11 @@ class Employee(Base, TimestampMixin):
     deleted_by: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Relationships
+    user: Mapped[Optional["User"]] = relationship(
+        "User",
+        back_populates="employee",
+        foreign_keys=[user_id]
+    )
     org_unit: Mapped[Optional["OrgUnit"]] = relationship(
         "OrgUnit",
         foreign_keys=[org_unit_id],
@@ -74,17 +94,13 @@ class Employee(Base, TimestampMixin):
         back_populates="head"
     )
 
-    # Constraints and indexes
+    # Constraints
     __table_args__ = (
         CheckConstraint(
-            "employee_type IN ('on_site', 'hybrid', 'ho') OR employee_type IS NULL",
-            name="ck_employees_employee_type"
+            "type IN ('on_site', 'hybrid', 'ho') OR type IS NULL",
+            name="ck_employees_type"
         ),
-        CheckConstraint(
-            "employee_gender IN ('male', 'female') OR employee_gender IS NULL",
-            name="ck_employees_employee_gender"
-        ),
-        Index('ix_employees_name_search', 'name', postgresql_using='btree'),
+        Index('ix_employees_number_search', 'number', postgresql_using='btree'),
     )
 
     def is_deleted(self) -> bool:
@@ -104,4 +120,4 @@ class Employee(Base, TimestampMixin):
         self.deleted_by = user_id
 
     def __repr__(self) -> str:
-        return f"<Employee(id={self.id}, number={self.number}, name={self.name})>"
+        return f"<Employee(id={self.id}, number={self.number})>"

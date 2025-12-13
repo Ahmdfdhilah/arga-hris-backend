@@ -1,6 +1,8 @@
 from app.modules.employees.schemas.responses import (
     EmployeeResponse,
     UserNestedResponse,
+    EmployeeOrgUnitNestedResponse,
+    EmployeeSupervisorNestedResponse,
     EmployeeAccountData,
     EmployeeAccountUpdateData,
     EmployeeAccountListItem,
@@ -19,6 +21,8 @@ __all__ = [
     # Responses
     "EmployeeResponse",
     "UserNestedResponse",
+    "EmployeeOrgUnitNestedResponse",
+    "EmployeeSupervisorNestedResponse",
     "EmployeeAccountData",
     "EmployeeAccountUpdateData",
     "EmployeeAccountListItem",
