@@ -1,24 +1,52 @@
 """Authorization and permission checking for HRIS Service.
 
-Uses SSO gRPC for token validation - all auth is delegated to SSO service.
-User profile data comes from SSO, HRIS only stores linking data.
+Hybrid approach:
+- Local JWT validation with public key (fast, no network)
+- gRPC to SSO only for JIT provisioning (first-time user)
 """
 
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from jose import jwt, JWTError
+from typing import Optional
 
+from app.config.settings import settings
 from app.core.schemas import CurrentUser
 from app.core.exceptions import UnauthorizedException
 from app.core.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
+_public_key: Optional[str] = None
+
+
+def _load_public_key() -> str:
+    global _public_key
+    if _public_key is None:
+        with open(settings.JWT_PUBLIC_KEY_PATH, "r") as f:
+            _public_key = f.read()
+    return _public_key
+
+
+def _verify_token_locally(token: str) -> dict:
+    try:
+        payload = jwt.decode(
+            token,
+            _load_public_key(),
+            algorithms=[settings.JWT_ALGORITHM]
+        )
+        if payload.get("type") != "access":
+            raise UnauthorizedException("Invalid token type")
+        return payload
+    except JWTError as e:
+        raise UnauthorizedException(f"Invalid token: {str(e)}")
+
 
 class JWTBearer(HTTPBearer):
     def __init__(self, auto_error: bool = True):
         super(JWTBearer, self).__init__(auto_error=auto_error)
 
-    async def __call__(self, request: Request) -> str:  #type: ignore
+    async def __call__(self, request: Request) -> str:
         credentials: HTTPAuthorizationCredentials | None = await super(
             JWTBearer, self
         ).__call__(request)
@@ -44,15 +72,12 @@ async def get_current_user(
     token: str = Depends(jwt_bearer),
 ) -> CurrentUser:
     """
-    Get the current authenticated user via SSO gRPC.
-
-    Flow:
-    1. Validate token via SSO gRPC → Get user profile + SSO role
-    2. Find/create HRIS user by sso_id → Get employee_id
+    Get current user with local JWT validation (hybrid approach).
+    
+    1. Validate token locally with public key (no network call)
+    2. Find/create HRIS user by sso_id
     3. Get HRIS-specific roles/permissions
-    4. Return combined CurrentUser
     """
-    from app.external_clients.grpc.sso_client import SSOAuthGRPCClient
     from app.modules.users.users.repositories.user_repository import UserRepository
     from app.modules.users.rbac.repositories.role_repository import RoleRepository
     from app.external_clients.grpc.employee_client import EmployeeGRPCClient
@@ -60,20 +85,19 @@ async def get_current_user(
     from app.config.database import get_db
 
     try:
-        sso_client = SSOAuthGRPCClient()
-        validation_result = await sso_client.validate_token(token)
-
-        if not validation_result.get("is_valid"):
-            error_msg = validation_result.get("error", "Token tidak valid")
-            raise UnauthorizedException(error_msg)
-
-        sso_user = validation_result.get("user")
-        if not sso_user:
-            raise UnauthorizedException("Token valid tapi data user tidak ditemukan")
-
-        sso_id = sso_user.get("id")
+        payload = _verify_token_locally(token)
+        
+        sso_id = payload.get("sub")
         if not sso_id:
-            raise UnauthorizedException("Token tidak memiliki identitas pengguna")
+            raise UnauthorizedException("Token missing user ID")
+        
+        sso_user = {
+            "id": sso_id,
+            "name": payload.get("name"),
+            "role": payload.get("role", "user"),
+            "email": None,
+            "avatar_url": None,
+        }
         
         db_gen = get_db()
         db = await db_gen.__anext__()
@@ -86,7 +110,6 @@ async def get_current_user(
         user = await user_repo.get_by_sso_id(sso_id)
 
         if not user:
-            # JIT provisioning - create HRIS user
             user = await _create_hris_user(
                 user_repo, role_repo, employee_client, org_unit_client,
                 sso_id, sso_user
@@ -100,7 +123,6 @@ async def get_current_user(
         user_permissions = await role_repo.get_user_permissions(user.id)
 
         return CurrentUser(
-            # HRIS data
             id=user.id,
             employee_id=user.employee_id,
             org_unit_id=user.org_unit_id,

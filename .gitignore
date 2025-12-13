@@ -74,3 +74,6 @@ dmypy.json
 # Claude
 .claude
 ./claude
+
+jwt_private.pem
+jwt_public.pem

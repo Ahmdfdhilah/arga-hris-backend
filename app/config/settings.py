@@ -26,9 +26,8 @@ class Settings(BaseSettings):
     )
     GCP_BUCKET_NAME: str = Field(default="sahabat-arga-bucket")
 
-    SECRET_KEY: str = Field(...)
-    ALGORITHM: str = Field(...)
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(...)
+    JWT_PUBLIC_KEY_PATH: str = Field(default="./jwt_public.pem")
+    JWT_ALGORITHM: str = Field(default="RS256")
 
     WORKFORCE_GRPC_HOST: str = Field(...)
     WORKFORCE_GRPC_PORT: int = Field(...)
