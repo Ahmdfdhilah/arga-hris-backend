@@ -3,7 +3,7 @@ Utility functions untuk leave request operations.
 """
 from typing import  Optional
 from datetime import date, timedelta
-from app.modules.leave_requests.repositories import LeaveRequestRepository
+from app.modules.leave_requests.repositories import LeaveRequestQueries
 
 def calculate_working_days(
     start_date: date, end_date: date, employee_type: Optional[str] = None
@@ -45,7 +45,7 @@ def calculate_working_days(
 
 
 async def validate_no_overlapping_leave(
-    leave_request_repo: LeaveRequestRepository,
+    leave_queries: LeaveRequestQueries,
     employee_id: int,
     start_date: date,
     end_date: date,
@@ -66,7 +66,7 @@ async def validate_no_overlapping_leave(
     """
     from app.core.exceptions import ConflictException
 
-    overlapping = await leave_request_repo.check_overlapping_leave(
+    overlapping = await leave_queries.check_overlapping(
         employee_id=employee_id,
         start_date=start_date,
         end_date=end_date,

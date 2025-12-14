@@ -1,8 +1,6 @@
 from typing import Optional, List
 from datetime import date
-from app.modules.leave_requests.repositories.leave_request_repository import (
-    LeaveRequestRepository,
-)
+from app.modules.leave_requests.repositories import LeaveRequestQueries, LeaveRequestCommands
 from app.modules.leave_requests.schemas.requests import (
     LeaveRequestCreateRequest,
     LeaveRequestUpdateRequest,
@@ -12,7 +10,7 @@ from app.modules.leave_requests.schemas.responses import (
     LeaveRequestListResponse,
 )
 from app.modules.leave_requests.schemas.shared import LeaveType
-from app.external_clients.grpc.employee_client import EmployeeGRPCClient
+from app.modules.employees.repositories import EmployeeQueries
 from app.core.exceptions import (
     NotFoundException,
     BadRequestException,
@@ -35,11 +33,31 @@ class LeaveRequestService:
 
     def __init__(
         self,
-        leave_request_repo: LeaveRequestRepository,
-        employee_client: EmployeeGRPCClient,
+        queries: LeaveRequestQueries,
+        commands: LeaveRequestCommands,
+        employee_queries: EmployeeQueries,
     ):
-        self.leave_request_repo = leave_request_repo
-        self.employee_client = employee_client
+        self.queries = queries
+        self.commands = commands
+        self.employee_queries = employee_queries
+
+    async def _get_employee_dict(self, employee_id: int) -> Optional[dict]:
+        emp = await self.employee_queries.get_by_id(employee_id)
+        if not emp:
+            return None
+        return {
+            "id": emp.id,
+            "name": emp.user.name if emp.user else None,
+            "employee_number": emp.employee_number,
+            "employee_type": emp.employee_type,
+        }
+
+    async def _get_subordinates_dict(self, employee_id: int, page: int = 1, limit: int = 100, recursive: bool = False) -> dict:
+        subordinates = await self.employee_queries.get_subordinates(employee_id, recursive=recursive)
+        return {
+            "employees": [{"id": e.id, "name": e.user.name if e.user else None, "employee_number": e.employee_number} for e in subordinates],
+            "pagination": {"total_items": len(subordinates), "total_pages": 1}
+        }
 
     async def create_leave_request(
         self, request: LeaveRequestCreateRequest, created_by_user_id: int
@@ -59,7 +77,7 @@ class LeaveRequestService:
             BadRequestException: Jika validasi tanggal gagal (HTTP 400)
             ConflictException: Jika ada cuti yang overlap (HTTP 409)
         """
-        employee_data = await self.employee_client.get_employee(request.employee_id)
+        employee_data = await self._get_employee_dict(request.employee_id)
         if not employee_data:
             raise NotFoundException(
                 f"Employee dengan ID {request.employee_id} tidak ditemukan"
@@ -70,7 +88,7 @@ class LeaveRequestService:
         validate_leave_dates(request.start_date, request.end_date)
 
         await validate_no_overlapping_leave(
-            leave_request_repo=self.leave_request_repo,
+            leave_queries=self.queries,
             employee_id=request.employee_id,
             start_date=request.start_date,
             end_date=request.end_date,
@@ -90,7 +108,7 @@ class LeaveRequestService:
             "created_by": created_by_user_id,
         }
 
-        leave_request = await self.leave_request_repo.create(leave_request_data)
+        leave_request = await self.commands.create(leave_request_data)
 
         leave_request_response = LeaveRequestResponse.model_validate(leave_request)
         return create_success_response(
@@ -113,7 +131,7 @@ class LeaveRequestService:
         Raises:
             NotFoundException: Jika leave request tidak ditemukan
         """
-        leave_request = await self.leave_request_repo.get(leave_request_id)
+        leave_request = await self.queries.get_by_id(leave_request_id)
 
         if not leave_request:
             raise NotFoundException(
@@ -146,7 +164,7 @@ class LeaveRequestService:
             BadRequestException: Jika tidak ada data yang akan diupdate atau validasi tanggal gagal (HTTP 400)
             ConflictException: Jika ada cuti yang overlap (HTTP 409)
         """
-        leave_request = await self.leave_request_repo.get(leave_request_id)
+        leave_request = await self.queries.get_by_id(leave_request_id)
 
         if not leave_request:
             raise NotFoundException(
@@ -165,7 +183,7 @@ class LeaveRequestService:
 
         if "start_date" in update_data or "end_date" in update_data:
             await validate_no_overlapping_leave(
-                leave_request_repo=self.leave_request_repo,
+                leave_queries=self.queries,
                 employee_id=leave_request.employee_id,
                 start_date=new_start_date,
                 end_date=new_end_date,
@@ -173,7 +191,7 @@ class LeaveRequestService:
             )
 
             # Get employee type untuk perhitungan total days
-            employee_data = await self.employee_client.get_employee(
+            employee_data = await self._get_employee_dict(
                 leave_request.employee_id
             )
             employee_type = employee_data.get("employee_type")
@@ -185,7 +203,7 @@ class LeaveRequestService:
         if "leave_type" in update_data:
             update_data["leave_type"] = update_data["leave_type"].value
 
-        updated_leave_request = await self.leave_request_repo.update(
+        updated_leave_request = await self.commands.update(
             leave_request_id, update_data
         )
 
@@ -210,14 +228,14 @@ class LeaveRequestService:
         Raises:
             NotFoundException: Jika leave request tidak ditemukan
         """
-        leave_request = await self.leave_request_repo.get(leave_request_id)
+        leave_request = await self.queries.get_by_id(leave_request_id)
 
         if not leave_request:
             raise NotFoundException(
                 f"Leave request dengan ID {leave_request_id} tidak ditemukan"
             )
 
-        await self.leave_request_repo.delete(leave_request_id)
+        await self.commands.delete(leave_request_id)
 
         return create_success_response(
             message="Leave request berhasil dihapus",
@@ -254,7 +272,7 @@ class LeaveRequestService:
 
         skip = (page - 1) * limit
 
-        leave_requests = await self.leave_request_repo.list_by_employee(
+        leave_requests = await self.queries.list_by_employee(
             employee_id=employee_id,
             start_date=start_date,
             end_date=end_date,
@@ -263,7 +281,7 @@ class LeaveRequestService:
             limit=limit,
         )
 
-        total_items = await self.leave_request_repo.count_by_employee(
+        total_items = await self.queries.count_by_employee(
             employee_id=employee_id,
             start_date=start_date,
             end_date=end_date,
@@ -312,7 +330,7 @@ class LeaveRequestService:
 
         skip = (page - 1) * limit
 
-        leave_requests = await self.leave_request_repo.list_all_leave_requests(
+        leave_requests = await self.queries.list_all(
             employee_id=employee_id,
             start_date=start_date,
             end_date=end_date,
@@ -321,7 +339,7 @@ class LeaveRequestService:
             limit=limit,
         )
 
-        total_items = await self.leave_request_repo.count_all_leave_requests(
+        total_items = await self.queries.count_all(
             employee_id=employee_id,
             start_date=start_date,
             end_date=end_date,
@@ -330,7 +348,7 @@ class LeaveRequestService:
 
         leave_requests_data: List[LeaveRequestListResponse] = []
         for lr in leave_requests:
-            employee_data = await self.employee_client.get_employee(lr.employee_id)
+            employee_data = await self._get_employee_dict(lr.employee_id)
 
             leave_request_response = LeaveRequestListResponse(
                 id=lr.id,
@@ -386,7 +404,7 @@ class LeaveRequestService:
         subordinate_page_size = 250
 
         while True:
-            subordinates_data = await self.employee_client.get_employee_subordinates(
+            subordinates_data = await self._get_subordinates_dict(
                 employee_id=employee_id,
                 page=subordinate_page,
                 limit=subordinate_page_size,
@@ -422,7 +440,7 @@ class LeaveRequestService:
 
         skip = (page - 1) * limit
 
-        leave_requests = await self.leave_request_repo.list_by_employees(
+        leave_requests = await self.queries.list_by_employees(
             employee_ids=subordinate_ids,
             start_date=start_date,
             end_date=end_date,
@@ -431,7 +449,7 @@ class LeaveRequestService:
             limit=limit,
         )
 
-        total_items = await self.leave_request_repo.count_by_employees(
+        total_items = await self.queries.count_by_employees(
             employee_ids=subordinate_ids,
             start_date=start_date,
             end_date=end_date,
@@ -440,7 +458,7 @@ class LeaveRequestService:
 
         leave_requests_data: List[LeaveRequestListResponse] = []
         for lr in leave_requests:
-            employee_data = await self.employee_client.get_employee(lr.employee_id)
+            employee_data = await self._get_employee_dict(lr.employee_id)
 
             leave_request_response = LeaveRequestListResponse(
                 id=lr.id,

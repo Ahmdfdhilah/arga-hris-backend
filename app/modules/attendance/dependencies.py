@@ -1,47 +1,51 @@
+"""
+Attendance Module Dependencies
+"""
+
 from typing import Annotated
 from fastapi import Depends
 from app.core.dependencies.database import PostgresDB
-from app.modules.attendance.repositories.attendance_repository import (
-    AttendanceRepository,
-)
+from app.modules.attendance.repositories import AttendanceQueries, AttendanceCommands
+from app.modules.leave_requests.repositories import LeaveRequestQueries
+from app.modules.employees.repositories import EmployeeQueries
 from app.modules.attendance.services.attendance_service import AttendanceService
-from app.modules.leave_requests.repositories.leave_request_repository import (
-    LeaveRequestRepository,
-)
-from app.external_clients.grpc.employee_client import EmployeeGRPCClient
 
 
-def get_attendance_repository(db: PostgresDB) -> AttendanceRepository:
-    return AttendanceRepository(db)
+def get_attendance_queries(db: PostgresDB) -> AttendanceQueries:
+    return AttendanceQueries(db)
 
 
-AttendanceRepositoryDep = Annotated[
-    AttendanceRepository, Depends(get_attendance_repository)
-]
+AttendanceQueriesDep = Annotated[AttendanceQueries, Depends(get_attendance_queries)]
 
 
-def get_leave_request_repository(db: PostgresDB) -> LeaveRequestRepository:
-    return LeaveRequestRepository(db)
+def get_attendance_commands(db: PostgresDB) -> AttendanceCommands:
+    return AttendanceCommands(db)
 
 
-LeaveRequestRepositoryDep = Annotated[
-    LeaveRequestRepository, Depends(get_leave_request_repository)
-]
+AttendanceCommandsDep = Annotated[AttendanceCommands, Depends(get_attendance_commands)]
 
 
-def get_employee_grpc_client() -> EmployeeGRPCClient:
-    return EmployeeGRPCClient()
+def get_leave_request_queries(db: PostgresDB) -> LeaveRequestQueries:
+    return LeaveRequestQueries(db)
 
 
-EmployeeGRPCClientDep = Annotated[EmployeeGRPCClient, Depends(get_employee_grpc_client)]
+LeaveRequestQueriesDep = Annotated[LeaveRequestQueries, Depends(get_leave_request_queries)]
+
+
+def get_employee_queries(db: PostgresDB) -> EmployeeQueries:
+    return EmployeeQueries(db)
+
+
+EmployeeQueriesDep = Annotated[EmployeeQueries, Depends(get_employee_queries)]
 
 
 def get_attendance_service(
-    attendance_repo: AttendanceRepositoryDep,
-    employee_client: EmployeeGRPCClientDep,
-    leave_request_repo: LeaveRequestRepositoryDep,
+    queries: AttendanceQueriesDep,
+    commands: AttendanceCommandsDep,
+    employee_queries: EmployeeQueriesDep,
+    leave_queries: LeaveRequestQueriesDep,
 ) -> AttendanceService:
-    return AttendanceService(attendance_repo, employee_client, leave_request_repo)
+    return AttendanceService(queries, commands, employee_queries, leave_queries)
 
 
 AttendanceServiceDep = Annotated[AttendanceService, Depends(get_attendance_service)]

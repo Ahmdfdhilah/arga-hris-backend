@@ -1,5 +1,4 @@
-"""Attendance repositories."""
+from app.modules.attendance.repositories.queries import AttendanceQueries
+from app.modules.attendance.repositories.commands import AttendanceCommands
 
-from app.modules.attendance.repositories.attendance_repository import AttendanceRepository
-
-__all__ = ["AttendanceRepository"]
+__all__ = ["AttendanceQueries", "AttendanceCommands"]

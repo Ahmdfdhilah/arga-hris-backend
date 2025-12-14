@@ -1,5 +1,4 @@
-from app.modules.work_submissions.repositories.work_submission_repository import (
-    WorkSubmissionRepository,
-)
+from app.modules.work_submissions.repositories.queries import WorkSubmissionQueries
+from app.modules.work_submissions.repositories.commands import WorkSubmissionCommands
 
-__all__ = ["WorkSubmissionRepository"]
+__all__ = ["WorkSubmissionQueries", "WorkSubmissionCommands"]

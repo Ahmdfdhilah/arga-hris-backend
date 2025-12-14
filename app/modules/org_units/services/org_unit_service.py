@@ -1,19 +1,18 @@
 """
 OrgUnit Service - Business logic for Organization Unit operations
-
-Uses local repository for master data and publishes events to RabbitMQ.
 """
 
 from typing import Optional, List, Tuple, Dict, Any
 import logging
 
 from app.modules.org_units.models.org_unit import OrgUnit
-from app.modules.org_units.repositories.org_unit_repository import (
-    OrgUnitRepository,
+from app.modules.org_units.repositories import (
+    OrgUnitQueries,
+    OrgUnitCommands,
     OrgUnitFilters,
     PaginationParams,
 )
-from app.modules.employees.repositories.employee_repository import EmployeeRepository
+from app.modules.employees.repositories import EmployeeQueries
 from app.modules.org_units.schemas.responses import (
     OrgUnitResponse,
     OrgUnitTypesResponse,
@@ -29,16 +28,18 @@ logger = logging.getLogger(__name__)
 
 
 class OrgUnitService:
-    """Service for org unit business logic using local repository"""
-    
+    """Service for org unit business logic"""
+
     def __init__(
         self,
-        org_unit_repo: OrgUnitRepository,
-        employee_repo: Optional[EmployeeRepository] = None,
+        queries: OrgUnitQueries,
+        commands: OrgUnitCommands,
+        employee_queries: Optional[EmployeeQueries] = None,
         event_publisher: Optional[EventPublisher] = None,
     ):
-        self.org_unit_repo = org_unit_repo
-        self.employee_repo = employee_repo
+        self.queries = queries
+        self.commands = commands
+        self.employee_queries = employee_queries
         self.event_publisher = event_publisher
 
     def _org_unit_to_event_data(self, org_unit: OrgUnit) -> Dict[str, Any]:
@@ -73,7 +74,7 @@ class OrgUnitService:
 
     async def get_org_unit(self, org_unit_id: int) -> OrgUnitResponse:
         """Get organization unit by ID"""
-        org_unit = await self.org_unit_repo.get_by_id(org_unit_id)
+        org_unit = await self.queries.get_by_id(org_unit_id)
         if not org_unit:
             raise NotFoundException(f"Organization unit with ID {org_unit_id} not found")
         
@@ -81,7 +82,7 @@ class OrgUnitService:
 
     async def get_org_unit_by_code(self, code: str) -> Optional[OrgUnitResponse]:
         """Get organization unit by code"""
-        org_unit = await self.org_unit_repo.get_by_code(code)
+        org_unit = await self.queries.get_by_code(code)
         if not org_unit:
             return None
         
@@ -103,7 +104,7 @@ class OrgUnitService:
             search=search
         )
         
-        org_units, pagination = await self.org_unit_repo.list(params, filters)
+        org_units, pagination = await self.queries.list(params, filters)
         
         items = [OrgUnitResponse.model_validate(ou) for ou in org_units]
         return items, pagination.to_dict()
@@ -116,18 +117,18 @@ class OrgUnitService:
     ) -> Tuple[List[OrgUnitResponse], Dict[str, Any]]:
         """Get children organization units"""
         params = PaginationParams(page=page, limit=limit)
-        org_units, pagination = await self.org_unit_repo.get_children(org_unit_id, False, params)
+        org_units, pagination = await self.queries.get_children(org_unit_id, False, params)
         
         items = [OrgUnitResponse.model_validate(ou) for ou in org_units]
         return items, pagination.to_dict()
 
     async def get_org_unit_hierarchy(self, org_unit_id: Optional[int] = None) -> OrgUnitHierarchyResponse:
         """Get organization unit hierarchy as tree"""
-        tree = await self.org_unit_repo.get_tree(org_unit_id, max_depth=10)
+        tree = await self.queries.get_tree(org_unit_id, max_depth=10)
         
         root = None
         if org_unit_id:
-            root_unit = await self.org_unit_repo.get_by_id(org_unit_id)
+            root_unit = await self.queries.get_by_id(org_unit_id)
             if root_unit:
                 root = OrgUnitResponse.model_validate(root_unit)
         
@@ -159,10 +160,10 @@ class OrgUnitService:
         org_unit_id: Optional[int] = None
     ) -> None:
         """Validate that employee can be assigned as head"""
-        if not self.employee_repo:
+        if not self.employee_queries:
             return
         
-        employee = await self.employee_repo.get_by_id(employee_id)
+        employee = await self.employee_queries.get_by_id(employee_id)
         if not employee:
             raise BadRequestException(f"Employee with ID {employee_id} not found")
         
@@ -170,7 +171,7 @@ class OrgUnitService:
             raise BadRequestException("Employee is not active")
         
         # Check if employee is already head of another unit
-        existing_head_units = await self.org_unit_repo.get_units_where_employee_is_head(employee_id)
+        existing_head_units = await self.queries.get_units_where_employee_is_head(employee_id)
         
         # Filter out current unit if updating
         other_units = [u for u in existing_head_units if org_unit_id is None or u.id != org_unit_id]
@@ -193,7 +194,7 @@ class OrgUnitService:
     ) -> OrgUnitResponse:
         """Create new organization unit"""
         # Check if code already exists
-        existing = await self.org_unit_repo.get_by_code(code)
+        existing = await self.queries.get_by_code(code)
         if existing:
             raise ConflictException(f"Organization unit code '{code}' already exists")
         
@@ -202,7 +203,7 @@ class OrgUnitService:
         path = "0"  # Temporary, will be updated after insert
         
         if parent_id:
-            parent = await self.org_unit_repo.get_by_id(parent_id)
+            parent = await self.queries.get_by_id(parent_id)
             if not parent:
                 raise BadRequestException(f"Parent organization unit with ID {parent_id} not found")
             level = parent.level + 1
@@ -225,19 +226,19 @@ class OrgUnitService:
         )
         org_unit.set_created_by(created_by)
         
-        created = await self.org_unit_repo.create(org_unit)
+        created = await self.commands.create(org_unit)
         
         # Update path with actual ID
         if parent_id:
-            parent = await self.org_unit_repo.get_by_id(parent_id)
+            parent = await self.queries.get_by_id(parent_id)
             created.path = f"{parent.path}.{created.id}"
         else:
             created.path = str(created.id)
         
-        await self.org_unit_repo.update(created)
+        await self.commands.update(created)
         
         # Reload with relationships
-        created = await self.org_unit_repo.get_by_id(created.id)
+        created = await self.queries.get_by_id(created.id)
         
         # Publish event
         await self._publish_event("created", created)
@@ -256,7 +257,7 @@ class OrgUnitService:
         is_active: Optional[bool] = None,
     ) -> OrgUnitResponse:
         """Update organization unit"""
-        org_unit = await self.org_unit_repo.get_by_id(org_unit_id)
+        org_unit = await self.queries.get_by_id(org_unit_id)
         if not org_unit:
             raise NotFoundException(f"Organization unit with ID {org_unit_id} not found")
         
@@ -268,7 +269,7 @@ class OrgUnitService:
             if parent_id == org_unit_id:
                 raise BadRequestException("Organization unit cannot be its own parent")
             
-            parent = await self.org_unit_repo.get_by_id(parent_id)
+            parent = await self.queries.get_by_id(parent_id)
             if not parent:
                 raise BadRequestException(f"Parent organization unit with ID {parent_id} not found")
             
@@ -298,10 +299,10 @@ class OrgUnitService:
         
         org_unit.set_updated_by(updated_by)
         
-        await self.org_unit_repo.update(org_unit)
+        await self.commands.update(org_unit)
         
         # Handle head change - update supervisor relationships
-        if head_id is not None and head_id != old_head_id and self.employee_repo:
+        if head_id is not None and head_id != old_head_id and self.employee_queries:
             await self._handle_head_change(org_unit_id, old_head_id, head_id, updated_by)
         
         # Recalculate path if parent changed
@@ -309,7 +310,7 @@ class OrgUnitService:
             await self._recalculate_path(org_unit)
         
         # Reload with relationships
-        updated = await self.org_unit_repo.get_by_id(org_unit_id)
+        updated = await self.queries.get_by_id(org_unit_id)
         
         # Publish event
         await self._publish_event("updated", updated)
@@ -324,65 +325,65 @@ class OrgUnitService:
         updated_by: int
     ) -> None:
         """Handle supervisor reassignments when org unit head changes"""
-        if not self.employee_repo or not old_head_id:
+        if not self.employee_queries or not old_head_id:
             return
         
-        org_unit = await self.org_unit_repo.get_by_id(org_unit_id)
+        org_unit = await self.queries.get_by_id(org_unit_id)
         if not org_unit:
             return
         
         # Get parent head for new head's supervisor
         parent_head_id = None
         if org_unit.parent_id:
-            parent = await self.org_unit_repo.get_by_id(org_unit.parent_id)
+            parent = await self.queries.get_by_id(org_unit.parent_id)
             if parent:
                 parent_head_id = parent.head_id
         
         # Update subordinates of old head → new head
-        subordinates = await self.employee_repo.get_all_by_supervisor(old_head_id)
+        subordinates = await self.employee_queries.get_all_by_supervisor(old_head_id)
         subordinate_ids = [s.id for s in subordinates if s.id != new_head_id]
         if subordinate_ids:
-            await self.employee_repo.bulk_update_supervisor(subordinate_ids, new_head_id, updated_by)
+            await self.employee_queries.bulk_update_supervisor(subordinate_ids, new_head_id, updated_by)
         
         # Set new head's supervisor to parent head
-        new_head = await self.employee_repo.get_by_id(new_head_id)
+        new_head = await self.employee_queries.get_by_id(new_head_id)
         if new_head:
             new_head.supervisor_id = parent_head_id
             new_head.set_updated_by(updated_by)
-            await self.employee_repo.update(new_head)
+            await self.employee_queries.update(new_head)
         
         # Set old head's supervisor to new head
-        old_head = await self.employee_repo.get_by_id(old_head_id)
+        old_head = await self.employee_queries.get_by_id(old_head_id)
         if old_head and old_head.org_unit_id == org_unit_id:
             old_head.supervisor_id = new_head_id
             old_head.set_updated_by(updated_by)
-            await self.employee_repo.update(old_head)
+            await self.employee_queries.update(old_head)
 
     async def _recalculate_path(self, org_unit: OrgUnit) -> None:
         """Recalculate path for org unit and all descendants"""
         if org_unit.parent_id:
-            parent = await self.org_unit_repo.get_by_id(org_unit.parent_id)
+            parent = await self.queries.get_by_id(org_unit.parent_id)
             if parent:
                 old_path = org_unit.path
                 org_unit.path = f"{parent.path}.{org_unit.id}"
                 org_unit.level = parent.level + 1
-                await self.org_unit_repo.update(org_unit)
+                await self.commands.update(org_unit)
                 
                 # Update all descendants
-                children, _ = await self.org_unit_repo.get_children(org_unit.id, recursive=True)
+                children, _ = await self.queries.get_children(org_unit.id, recursive=True)
                 for child in children:
                     child.path = child.path.replace(old_path, org_unit.path, 1)
                     parts = child.path.split('.')
                     child.level = len(parts)
-                    await self.org_unit_repo.update(child)
+                    await self.commands.update(child)
         else:
             org_unit.path = str(org_unit.id)
             org_unit.level = 1
-            await self.org_unit_repo.update(org_unit)
+            await self.commands.update(org_unit)
 
     async def get_org_unit_types(self) -> OrgUnitTypesResponse:
         """Get all available org unit types"""
-        types = await self.org_unit_repo.get_unique_types()
+        types = await self.queries.get_unique_types()
         return OrgUnitTypesResponse(types=types)
 
     async def soft_delete_org_unit(
@@ -391,7 +392,7 @@ class OrgUnitService:
         deleted_by_user_id: int
     ) -> OrgUnitResponse:
         """Soft delete organization unit with validation"""
-        org_unit = await self.org_unit_repo.get_by_id(org_unit_id)
+        org_unit = await self.queries.get_by_id(org_unit_id)
         if not org_unit:
             raise NotFoundException(f"Organization unit with ID {org_unit_id} not found")
         
@@ -399,7 +400,7 @@ class OrgUnitService:
             raise BadRequestException("Organization unit is already deleted")
         
         # Check for active employees
-        active_count = await self.org_unit_repo.count_active_employees(org_unit_id)
+        active_count = await self.queries.count_active_employees(org_unit_id)
         if active_count > 0:
             raise BadRequestException(
                 f"Cannot delete org unit: has {active_count} active employees. "
@@ -407,7 +408,7 @@ class OrgUnitService:
             )
         
         # Check for child units
-        child_count = await self.org_unit_repo.count_active_children(org_unit_id)
+        child_count = await self.queries.count_active_children(org_unit_id)
         if child_count > 0:
             raise BadRequestException(
                 f"Cannot delete org unit: has {child_count} child units. "
@@ -415,10 +416,10 @@ class OrgUnitService:
             )
         
         # Soft delete
-        await self.org_unit_repo.delete(org_unit_id, deleted_by_user_id)
+        await self.commands.delete(org_unit_id, deleted_by_user_id)
         
         # Get updated org unit
-        deleted_ou = await self.org_unit_repo.get_by_id_with_deleted(org_unit_id)
+        deleted_ou = await self.queries.get_by_id_with_deleted(org_unit_id)
         
         # Publish event
         await self._publish_event("deleted", deleted_ou)
@@ -427,7 +428,7 @@ class OrgUnitService:
 
     async def restore_org_unit(self, org_unit_id: int) -> OrgUnitResponse:
         """Restore soft-deleted organization unit"""
-        org_unit = await self.org_unit_repo.get_by_id_with_deleted(org_unit_id)
+        org_unit = await self.queries.get_by_id_with_deleted(org_unit_id)
         if not org_unit:
             raise NotFoundException(f"Organization unit with ID {org_unit_id} not found")
         
@@ -436,11 +437,11 @@ class OrgUnitService:
         
         # Check if parent is deleted
         if org_unit.parent_id:
-            parent = await self.org_unit_repo.get_by_id_with_deleted(org_unit.parent_id)
+            parent = await self.queries.get_by_id_with_deleted(org_unit.parent_id)
             if parent and parent.is_deleted():
                 raise BadRequestException("Cannot restore: parent unit is still deleted")
         
-        restored = await self.org_unit_repo.restore(org_unit_id)
+        restored = await self.commands.restore(org_unit_id)
         
         # Publish event (restored = updated)
         await self._publish_event("updated", restored)
@@ -455,7 +456,7 @@ class OrgUnitService:
     ) -> Tuple[List[OrgUnitResponse], Dict[str, Any]]:
         """List soft-deleted organization units"""
         params = PaginationParams(page=page, limit=limit)
-        org_units, pagination = await self.org_unit_repo.list_deleted(params, search)
+        org_units, pagination = await self.queries.list_deleted(params, search)
         
         items = [OrgUnitResponse.model_validate(ou) for ou in org_units]
         return items, pagination.to_dict()
@@ -480,11 +481,11 @@ class OrgUnitService:
         email_to_employee_map = {}
         
         # Resolve head emails to employee IDs
-        if self.employee_repo:
+        if self.employee_queries:
             for item in items:
                 if item.head_email and item.head_email not in email_to_employee_map:
                     try:
-                        employee = await self.employee_repo.get_by_email(item.head_email)
+                        employee = await self.employee_queries.get_by_email(item.head_email)
                         if employee:
                             email_to_employee_map[item.head_email] = employee.id
                     except Exception:

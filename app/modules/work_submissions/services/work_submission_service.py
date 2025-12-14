@@ -1,9 +1,7 @@
 from typing import Optional, List, Dict, Any, Tuple
 from datetime import date
 from fastapi import UploadFile, HTTPException
-from app.modules.work_submissions.repositories.work_submission_repository import (
-    WorkSubmissionRepository,
-)
+from app.modules.work_submissions.repositories import WorkSubmissionQueries, WorkSubmissionCommands
 from app.modules.work_submissions.schemas.requests import (
     WorkSubmissionCreateRequest,
     WorkSubmissionUpdateRequest,
@@ -26,7 +24,7 @@ from app.core.utils.file_upload import (
 from app.core.utils.datetime import get_utc_now
 from app.config.constants import FileUploadConstants
 from app.config.settings import settings
-from app.external_clients.grpc.employee_client import EmployeeGRPCClient
+from app.modules.employees.repositories import EmployeeQueries
 
 
 class WorkSubmissionService:
@@ -47,11 +45,25 @@ class WorkSubmissionService:
 
     def __init__(
         self,
-        work_submission_repo: WorkSubmissionRepository,
-        employee_client: EmployeeGRPCClient,
+        queries: WorkSubmissionQueries,
+        commands: WorkSubmissionCommands,
+        employee_queries: EmployeeQueries,
     ):
-        self.work_submission_repo = work_submission_repo
-        self.employee_client = employee_client
+        self.queries = queries
+        self.commands = commands
+        self.employee_queries = employee_queries
+
+    async def _get_employee_dict(self, employee_id: int):
+        """Helper to get employee as dict for backward compat"""
+        emp = await self.employee_queries.get_by_id(employee_id)
+        if not emp:
+            return None
+        return {
+            "id": emp.id,
+            "name": emp.user.name if emp.user else None,
+            "employee_number": emp.employee_number,
+        }
+
 
     def _convert_files_paths_to_urls(
         self, files_metadata: List[Dict[str, Any]]
@@ -92,7 +104,7 @@ class WorkSubmissionService:
         """Get work submissions milik employee sendiri."""
         skip = (page - 1) * limit
 
-        submissions = await self.work_submission_repo.list_by_employee(
+        submissions = await self.queries.list_by_employee(
             employee_id=employee_id,
             submission_month=submission_month,
             status=status,
@@ -100,7 +112,7 @@ class WorkSubmissionService:
             limit=limit,
         )
 
-        total = await self.work_submission_repo.count_by_employee(
+        total = await self.queries.count_by_employee(
             employee_id=employee_id,
             submission_month=submission_month,
             status=status,
@@ -142,7 +154,7 @@ class WorkSubmissionService:
             request.submission_month.year, request.submission_month.month, 1
         )
 
-        existing = await self.work_submission_repo.check_existing_submission(
+        existing = await self.queries.check_existing(
             employee_id=request.employee_id,
             submission_month=normalized_month,
         )
@@ -165,7 +177,7 @@ class WorkSubmissionService:
             "created_by": created_by_user_id,
         }
 
-        submission = await self.work_submission_repo.create(submission_data)
+        submission = await self.commands.create(submission_data)
 
         return WorkSubmissionResponse(
             id=submission.id,
@@ -183,7 +195,7 @@ class WorkSubmissionService:
 
     async def get_submission_by_id(self, submission_id: int) -> WorkSubmissionResponse:
         """Get work submission by ID."""
-        submission = await self.work_submission_repo.get(submission_id)
+        submission = await self.queries.get_by_id(submission_id)
 
         if not submission:
             raise NotFoundException(
@@ -212,7 +224,7 @@ class WorkSubmissionService:
         request: WorkSubmissionUpdateRequest,
     ) -> WorkSubmissionResponse:
         """Update work submission."""
-        submission = await self.work_submission_repo.get(submission_id)
+        submission = await self.queries.get_by_id(submission_id)
 
         if not submission:
             raise NotFoundException(
@@ -244,7 +256,7 @@ class WorkSubmissionService:
 
             update_data["status"] = request.status.value
 
-        updated_submission = await self.work_submission_repo.update(
+        updated_submission = await self.commands.update(
             submission_id, update_data
         )
 
@@ -273,7 +285,7 @@ class WorkSubmissionService:
 
     async def delete_submission(self, submission_id: int) -> None:
         """Delete work submission dan semua files-nya."""
-        submission = await self.work_submission_repo.get(submission_id)
+        submission = await self.queries.get_by_id(submission_id)
 
         if not submission:
             raise NotFoundException(
@@ -287,7 +299,7 @@ class WorkSubmissionService:
                 if signed_url:
                     delete_file_from_gcp_url(signed_url)
 
-        await self.work_submission_repo.delete(submission_id)
+        await self.commands.delete(submission_id)
 
     async def upload_files(
         self,
@@ -295,7 +307,7 @@ class WorkSubmissionService:
         files: List[UploadFile],
     ) -> WorkSubmissionResponse:
         """Upload files ke submission yang sudah ada."""
-        submission = await self.work_submission_repo.get(submission_id)
+        submission = await self.queries.get_by_id(submission_id)
 
         if not submission:
             raise NotFoundException(
@@ -349,9 +361,9 @@ class WorkSubmissionService:
         current_files: List[Dict[str, Any]] = submission.files or []
         updated_files = current_files + uploaded_files_metadata
 
-        await self.work_submission_repo.update(submission_id, {"files": updated_files})
+        await self.commands.update(submission_id, {"files": updated_files})
 
-        updated_submission = await self.work_submission_repo.get(submission_id)
+        updated_submission = await self.queries.get_by_id(submission_id)
 
         if not updated_submission:
             raise NotFoundException(
@@ -382,7 +394,7 @@ class WorkSubmissionService:
         file_path: str,
     ) -> WorkSubmissionResponse:
         """Delete single file dari submission."""
-        submission = await self.work_submission_repo.get(submission_id)
+        submission = await self.queries.get_by_id(submission_id)
 
         if not submission:
             raise NotFoundException(
@@ -411,9 +423,9 @@ class WorkSubmissionService:
         if not file_found:
             raise NotFoundException(f"File dengan path {file_path} tidak ditemukan")
 
-        await self.work_submission_repo.update(submission_id, {"files": updated_files})
+        await self.commands.update(submission_id, {"files": updated_files})
 
-        updated_submission = await self.work_submission_repo.get(submission_id)
+        updated_submission = await self.queries.get_by_id(submission_id)
 
         if not updated_submission:
             raise NotFoundException(
@@ -449,7 +461,7 @@ class WorkSubmissionService:
         """List semua submissions untuk admin."""
         skip = (page - 1) * limit
 
-        submissions = await self.work_submission_repo.list_all_submissions(
+        submissions = await self.queries.list_all(
             employee_id=employee_id,
             submission_month=submission_month,
             status=status,
@@ -457,7 +469,7 @@ class WorkSubmissionService:
             limit=limit,
         )
 
-        total = await self.work_submission_repo.count_all_submissions(
+        total = await self.queries.count_all(
             employee_id=employee_id,
             submission_month=submission_month,
             status=status,
@@ -468,7 +480,7 @@ class WorkSubmissionService:
             employee_name: Optional[str] = None
             employee_number: Optional[str] = None
             try:
-                employee_info = await self.employee_client.get_employee(
+                employee_info = await self._get_employee_dict(
                     submission.employee_id
                 )
                 if employee_info:

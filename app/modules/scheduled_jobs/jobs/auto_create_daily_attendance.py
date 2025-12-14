@@ -21,10 +21,8 @@ import logging
 from app.core.scheduler.base import BaseScheduledJob
 from app.config.database import get_db_context
 from app.modules.attendance.models.attendance import Attendance
-from app.modules.attendance.repositories.attendance_repository import (
-    AttendanceRepository,
-)
-from app.external_clients.grpc.employee_client import EmployeeGRPCClient
+from app.modules.attendance.repositories import AttendanceQueries, AttendanceCommands
+from app.modules.employees.repositories import EmployeeQueries, EmployeeFilters, PaginationParams
 
 logger = logging.getLogger(__name__)
 
@@ -70,42 +68,41 @@ class AutoCreateDailyAttendanceJob(BaseScheduledJob):
         try:
             # Get database session
             async with get_db_context() as db:
-                attendance_repo = AttendanceRepository(db)
+                attendance_queries = AttendanceQueries(db)
+                attendance_commands = AttendanceCommands(db)
+                employee_queries = EmployeeQueries(db)
 
-                # Get semua karyawan aktif dari Workforce Service via gRPC
-                employee_client = EmployeeGRPCClient()
+                # Get semua karyawan aktif dari local repository
+                all_employees = []
+                page = 1
+                limit = 200  # Max items per page
 
-                try:
-                    # List all active employees dengan pagination (loop semua pages)
-                    all_employees = []
-                    page = 1
-                    limit = 200  # Max items per page
+                while True:
+                    params = PaginationParams(page=page, limit=limit)
+                    filters = EmployeeFilters(is_active=True)
+                    employees_list, pagination = await employee_queries.list(params, filters)
+                    
+                    for emp in employees_list:
+                        all_employees.append({
+                            "id": emp.id,
+                            "org_unit_id": emp.org_unit_id,
+                            "employee_type": emp.employee_type,
+                        })
 
-                    while True:
-                        employees_response = await employee_client.list_employees(
-                            page=page, limit=limit, is_active=True
-                        )
+                    logger.info(
+                        f"Fetched page {page}/{pagination.total_pages}, "
+                        f"total employees so far: {len(all_employees)}"
+                    )
 
-                        all_employees.extend(employees_response.get("employees", []))
+                    if page >= pagination.total_pages:
+                        break
 
-                        # Check if there are more pages
-                        pagination = employees_response.get("pagination", {})
-                        total_pages = pagination.get("total_pages", 1)
+                    page += 1
 
-                        logger.info(
-                            f"Fetched page {page}/{total_pages}, "
-                            f"total employees so far: {len(all_employees)}"
-                        )
+                employees = all_employees
+                total_employees = len(employees)
 
-                        if page >= total_pages:
-                            break
-
-                        page += 1
-
-                    employees = all_employees
-                    total_employees = len(employees)
-
-                    logger.info(f"Ditemukan total {total_employees} karyawan aktif")
+                logger.info(f"Ditemukan total {total_employees} karyawan aktif")
 
                     # Iterate employees dan create attendance
                     for employee in employees:
@@ -136,7 +133,7 @@ class AutoCreateDailyAttendanceJob(BaseScheduledJob):
                                 continue
 
                             # Cek apakah attendance sudah ada untuk employee & date ini
-                            existing = await attendance_repo.get_by_employee_and_date(
+                            existing = await attendance_queries.get_by_employee_and_date(
                                 employee_id=employee_id, attendance_date=today
                             )
 
@@ -164,7 +161,7 @@ class AutoCreateDailyAttendanceJob(BaseScheduledJob):
                                 "status": attendance_status,
                             }
 
-                            await attendance_repo.create(attendance_data)
+                            await attendance_commands.create(attendance_data)
                             created_count += 1
 
                             logger.debug(
@@ -201,8 +198,7 @@ class AutoCreateDailyAttendanceJob(BaseScheduledJob):
                         },
                     }
 
-                finally:
-                    await employee_client.close()
+
 
         except Exception as e:
             error_message = f"Error saat execute auto-create attendance: {str(e)}"

@@ -1,3 +1,4 @@
-from app.modules.users.rbac.repositories.role_repository import RoleRepository
+from app.modules.users.rbac.repositories.queries import RoleQueries
+from app.modules.users.rbac.repositories.commands import RoleCommands
 
-__all__ = ["RoleRepository"]
+__all__ = ["RoleQueries", "RoleCommands"]

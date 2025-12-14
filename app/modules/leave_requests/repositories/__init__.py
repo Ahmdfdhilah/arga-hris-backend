@@ -1,5 +1,4 @@
-from app.modules.leave_requests.repositories.leave_request_repository import (
-    LeaveRequestRepository,
-)
+from app.modules.leave_requests.repositories.queries import LeaveRequestQueries
+from app.modules.leave_requests.repositories.commands import LeaveRequestCommands
 
-__all__ = ["LeaveRequestRepository"]
+__all__ = ["LeaveRequestQueries", "LeaveRequestCommands"]

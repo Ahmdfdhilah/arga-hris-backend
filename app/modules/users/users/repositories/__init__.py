@@ -1,3 +1,4 @@
-from app.modules.users.users.repositories.user_repository import UserRepository
+from app.modules.users.users.repositories.queries import UserQueries
+from app.modules.users.users.repositories.commands import UserCommands
 
-__all__ = ["UserRepository"]
+__all__ = ["UserQueries", "UserCommands"]

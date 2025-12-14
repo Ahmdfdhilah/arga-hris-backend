@@ -2,9 +2,7 @@ from typing import Optional, Tuple
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from fastapi import UploadFile, Request
-from app.modules.attendance.repositories.attendance_repository import (
-    AttendanceRepository,
-)
+from app.modules.attendance.repositories import AttendanceQueries, AttendanceCommands
 from app.modules.attendance.schemas import (
     CheckInRequest,
     CheckOutRequest,
@@ -21,11 +19,9 @@ from app.modules.attendance.schemas.responses import (
     AttendanceStatusCheckResponse,
     LeaveDetailsResponse,
 )
-from app.modules.leave_requests.repositories.leave_request_repository import (
-    LeaveRequestRepository,
-)
+from app.modules.leave_requests.repositories import LeaveRequestQueries
 
-from app.external_clients.grpc.employee_client import EmployeeGRPCClient
+from app.modules.employees.repositories import EmployeeQueries
 from app.external_clients.rest.nominatim_client import nominatim_client
 from app.core.exceptions import (
     NotFoundException,
@@ -43,13 +39,57 @@ class AttendanceService:
 
     def __init__(
         self,
-        attendance_repo: AttendanceRepository,
-        employee_client: EmployeeGRPCClient,
-        leave_request_repo: LeaveRequestRepository,
+        queries: AttendanceQueries,
+        commands: AttendanceCommands,
+        employee_queries: EmployeeQueries,
+        leave_queries: LeaveRequestQueries,
     ):
-        self.attendance_repo = attendance_repo
-        self.employee_client = employee_client
-        self.leave_request_repo = leave_request_repo
+        self.queries = queries
+        self.commands = commands
+        self.employee_queries = employee_queries
+        self.leave_queries = leave_queries
+
+    async def _get_employee_dict(self, employee_id: int) -> Optional[dict]:
+        """Helper to get employee as dict for backward compat"""
+        emp = await self.employee_queries.get_by_id(employee_id)
+        if not emp:
+            return None
+        return {
+            "id": emp.id,
+            "name": emp.user.name if emp.user else None,
+            "employee_number": emp.employee_number,
+            "employee_type": emp.employee_type,
+            "org_unit_id": emp.org_unit_id,
+            "is_active": emp.is_active,
+        }
+
+    async def _list_employees_dict(self, org_unit_id: int = None, page: int = 1, limit: int = 100) -> dict:
+        """Helper to list employees as dict"""
+        from app.modules.employees.repositories import EmployeeFilters, PaginationParams
+        params = PaginationParams(page=page, limit=limit)
+        filters = EmployeeFilters(org_unit_id=org_unit_id, is_active=True)
+        employees, pagination = await self.employee_queries.list(params, filters)
+        return {
+            "employees": [{"id": e.id, "name": e.user.name if e.user else None, "employee_number": e.employee_number, "employee_type": e.employee_type} for e in employees],
+            "pagination": pagination.to_dict()
+        }
+
+    async def _get_employees_by_org_unit_dict(self, org_unit_id: int, page: int = 1, limit: int = 100, include_children: bool = False) -> dict:
+        """Helper to get employees by org unit as dict"""
+        employees = await self.employee_queries.get_by_org_unit_id(org_unit_id, include_children=include_children)
+        return {
+            "employees": [{"id": e.id, "name": e.user.name if e.user else None, "employee_number": e.employee_number, "employee_type": e.employee_type, "org_unit_id": e.org_unit_id} for e in employees],
+            "pagination": {"total_items": len(employees)}
+        }
+
+    async def _get_subordinates_dict(self, employee_id: int, page: int = 1, limit: int = 100, recursive: bool = False) -> dict:
+        """Helper to get subordinates as dict"""
+        subordinates = await self.employee_queries.get_subordinates(employee_id, recursive=recursive)
+        return {
+            "employees": [{"id": e.id, "name": e.user.name if e.user else None, "employee_number": e.employee_number} for e in subordinates],
+            "pagination": {"total_items": len(subordinates), "total_pages": 1}
+        }
+
 
     def _validate_working_day_and_employee_type(
         self, check_date: date, employee_type: Optional[str]
@@ -88,7 +128,7 @@ class AttendanceService:
         Raises:
             ValidationException: Jika employee sedang cuti
         """
-        leave_request = await self.leave_request_repo.is_employee_on_leave(
+        leave_request = await self.leave_queries.is_on_leave(
             employee_id, check_date
         )
 
@@ -158,7 +198,7 @@ class AttendanceService:
         today = date.today()
 
         # Get employee info untuk ambil org_unit_id dan employee_type
-        employee_data = await self.employee_client.get_employee(employee_id)
+        employee_data = await self._get_employee_dict(employee_id)
         org_unit_id = employee_data.get("org_unit_id")
         employee_type = employee_data.get("employee_type")
 
@@ -169,7 +209,7 @@ class AttendanceService:
         await self._validate_not_on_leave(employee_id, today)
 
         # Cek apakah sudah ada attendance hari ini
-        existing = await self.attendance_repo.get_by_employee_and_date(
+        existing = await self.queries.get_by_employee_and_date(
             employee_id, today
         )
 
@@ -216,7 +256,7 @@ class AttendanceService:
                 "status": "present",
                 "org_unit_id": org_unit_id,
             }
-            attendance = await self.attendance_repo.update(existing.id, update_data)
+            attendance = await self.commands.update(existing.id, update_data)
         else:
             # Create new attendance
             attendance_data = {
@@ -234,7 +274,7 @@ class AttendanceService:
                 "check_in_location_name": location_name,
                 "created_by": employee_id,
             }
-            attendance = await self.attendance_repo.create(attendance_data)
+            attendance = await self.commands.create(attendance_data)
 
         if not attendance:
             raise ValidationException("Gagal membuat atau update data attendance")
@@ -321,7 +361,7 @@ class AttendanceService:
         today = date.today()
 
         # Get employee info untuk validasi employee type
-        employee_data = await self.employee_client.get_employee(employee_id)
+        employee_data = await self._get_employee_dict(employee_id)
         employee_type = employee_data.get("employee_type")
 
         # Validate hari kerja berdasarkan employee type
@@ -331,7 +371,7 @@ class AttendanceService:
         await self._validate_not_on_leave(employee_id, today)
 
         # Cek apakah sudah ada attendance hari ini
-        existing = await self.attendance_repo.get_by_employee_and_date(
+        existing = await self.queries.get_by_employee_and_date(
             employee_id, today
         )
 
@@ -384,7 +424,7 @@ class AttendanceService:
             "work_hours": work_hours,
             "overtime_hours": overtime_hours,
         }
-        attendance = await self.attendance_repo.update(existing.id, update_data)
+        attendance = await self.commands.update(existing.id, update_data)
 
         if not attendance:
             raise ValidationException("Gagal update data attendance untuk check-out")
@@ -440,11 +480,11 @@ class AttendanceService:
 
         skip = (page - 1) * limit
 
-        attendances = await self.attendance_repo.list_by_employee(
+        attendances = await self.queries.list_by_employee(
             employee_id, start_date, end_date, skip, limit
         )
 
-        total_items = await self.attendance_repo.count_by_employee(
+        total_items = await self.queries.count_by_employee(
             employee_id, start_date, end_date
         )
 
@@ -453,7 +493,7 @@ class AttendanceService:
         employee_number = None
         org_unit_name = None
         try:
-            employee_data = await self.employee_client.get_employee(employee_id)
+            employee_data = await self._get_employee_dict(employee_id)
             employee_name = employee_data.get("name")
             employee_number = employee_data.get("employee_number")
 
@@ -516,7 +556,7 @@ class AttendanceService:
         subordinate_page_size = 250
 
         while True:
-            subordinates_data = await self.employee_client.get_employee_subordinates(
+            subordinates_data = await self._get_subordinates_dict(
                 employee_id=employee_id,
                 page=subordinate_page,
                 limit=subordinate_page_size,
@@ -546,11 +586,11 @@ class AttendanceService:
 
         skip = (page - 1) * limit
 
-        attendances = await self.attendance_repo.list_by_employees(
+        attendances = await self.queries.list_by_employees(
             subordinate_ids, start_date, end_date, status, skip, limit
         )
 
-        total_items = await self.attendance_repo.count_by_employees(
+        total_items = await self.queries.count_by_employees(
             subordinate_ids, start_date, end_date, status
         )
 
@@ -562,7 +602,7 @@ class AttendanceService:
             employee_number = None
             org_unit_name = None
             try:
-                employee_data = await self.employee_client.get_employee(att.employee_id)
+                employee_data = await self._get_employee_dict(att.employee_id)
                 employee_name = employee_data.get("name")
                 employee_number = employee_data.get("employee_number")
 
@@ -645,7 +685,7 @@ class AttendanceService:
         skip = (page - 1) * limit
 
         # Ambil attendance list
-        attendances = await self.attendance_repo.list_all_attendances(
+        attendances = await self.queries.list_all(
             employee_ids=employee_ids,
             org_unit_id=org_unit_id,
             start_date=start_date,
@@ -656,7 +696,7 @@ class AttendanceService:
         )
 
         # Count total
-        total_items = await self.attendance_repo.count_all_attendances(
+        total_items = await self.queries.count_all(
             employee_ids=employee_ids,
             org_unit_id=org_unit_id,
             start_date=start_date,
@@ -672,7 +712,7 @@ class AttendanceService:
             employee_number = None
             org_unit_name = None
             try:
-                employee_data = await self.employee_client.get_employee(att.employee_id)
+                employee_data = await self._get_employee_dict(att.employee_id)
                 employee_name = employee_data.get("name")
                 employee_number = employee_data.get("employee_number")
 
@@ -733,7 +773,7 @@ class AttendanceService:
         limit = 200  # Max items per page
 
         while True:
-            employees_data = await self.employee_client.list_employees(
+            employees_data = await self._list_employees_dict(
                 page=page,
                 limit=limit,
                 is_active=True,
@@ -761,7 +801,7 @@ class AttendanceService:
 
             try:
                 # Cek apakah sudah ada attendance pada tanggal ini
-                existing = await self.attendance_repo.get_by_employee_and_date(
+                existing = await self.queries.get_by_employee_and_date(
                     employee_id, request.attendance_date
                 )
 
@@ -771,7 +811,7 @@ class AttendanceService:
                         "status": "present",
                         "check_in_notes": request.notes,
                     }
-                    await self.attendance_repo.update(existing.id, update_data)
+                    await self.commands.update(existing.id, update_data)
                     updated_count += 1
                 else:
                     # Create new attendance
@@ -783,7 +823,7 @@ class AttendanceService:
                         "check_in_notes": request.notes,
                         "created_by": created_by,
                     }
-                    await self.attendance_repo.create(attendance_data)
+                    await self.commands.create(attendance_data)
                     created_count += 1
             except Exception as e:
                 # Skip jika ada error untuk employee tertentu
@@ -815,7 +855,7 @@ class AttendanceService:
         today = date.today()
 
         # Get employee info untuk cek employee type
-        employee_data = await self.employee_client.get_employee(employee_id)
+        employee_data = await self._get_employee_dict(employee_id)
         employee_type = employee_data.get("employee_type")
 
         # Check working day dengan mempertimbangkan employee type
@@ -830,7 +870,7 @@ class AttendanceService:
             is_working_day = True
 
         # Check leave status
-        leave_request = await self.leave_request_repo.is_employee_on_leave(
+        leave_request = await self.leave_queries.is_on_leave(
             employee_id, today
         )
         is_on_leave = leave_request is not None
@@ -988,7 +1028,7 @@ class AttendanceService:
             "check_out_notes": final_notes,
         }
 
-        updated_attendance = await self.attendance_repo.update(
+        updated_attendance = await self.commands.update(
             attendance_id, update_data
         )
 
@@ -1088,7 +1128,7 @@ class AttendanceService:
         limit = 200  # Max items per page
 
         while True:
-            employees_data = await self.employee_client.get_employees_by_org_unit(
+            employees_data = await self._get_employees_by_org_unit_dict(
                 org_unit_id=org_unit_id,
                 page=page,
                 limit=limit,
@@ -1107,7 +1147,7 @@ class AttendanceService:
             return []
 
         # Get all attendance untuk org_unit dan date range
-        attendances = await self.attendance_repo.get_attendance_report_by_org_unit(
+        attendances = await self.queries.get_report_by_org_unit(
             org_unit_id=org_unit_id,
             start_date=start_date,
             end_date=end_date,
@@ -1240,7 +1280,7 @@ class AttendanceService:
         # Get employees dengan paginasi
         if org_unit_id:
             # Get employees dari org unit tertentu
-            employees_data = await self.employee_client.get_employees_by_org_unit(
+            employees_data = await self._get_employees_by_org_unit_dict(
                 org_unit_id=org_unit_id,
                 page=page,
                 limit=limit,
@@ -1248,7 +1288,7 @@ class AttendanceService:
             )
         else:
             # Get ALL active employees (tanpa filter org_unit_id)
-            employees_data = await self.employee_client.list_employees(
+            employees_data = await self._list_employees_dict(
                 page=page,
                 limit=limit,
                 is_active=True,
@@ -1269,7 +1309,7 @@ class AttendanceService:
         employee_ids = [emp["id"] for emp in employees]
 
         # Get semua attendance untuk employee IDs ini dalam date range
-        attendances = await self.attendance_repo.get_attendances_by_employee_ids(
+        attendances = await self.queries.get_by_employee_ids(
             employee_ids=employee_ids,
             start_date=start_date,
             end_date=end_date,

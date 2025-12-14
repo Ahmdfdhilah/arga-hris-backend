@@ -1,38 +1,42 @@
+"""
+WorkSubmission Module Dependencies
+"""
+
 from typing import Annotated
 from fastapi import Depends
 from app.core.dependencies.database import PostgresDB
-from app.modules.work_submissions.repositories.work_submission_repository import (
-    WorkSubmissionRepository,
-)
-from app.modules.work_submissions.services.work_submission_service import (
-    WorkSubmissionService,
-)
-from app.external_clients.grpc.employee_client import EmployeeGRPCClient
+from app.modules.work_submissions.repositories import WorkSubmissionQueries, WorkSubmissionCommands
+from app.modules.employees.repositories import EmployeeQueries
+from app.modules.work_submissions.services.work_submission_service import WorkSubmissionService
 
 
-def get_work_submission_repository(db: PostgresDB) -> WorkSubmissionRepository:
-    return WorkSubmissionRepository(db)
+def get_work_submission_queries(db: PostgresDB) -> WorkSubmissionQueries:
+    return WorkSubmissionQueries(db)
 
 
-WorkSubmissionRepositoryDep = Annotated[
-    WorkSubmissionRepository, Depends(get_work_submission_repository)
-]
+WorkSubmissionQueriesDep = Annotated[WorkSubmissionQueries, Depends(get_work_submission_queries)]
 
 
-def get_employee_grpc_client() -> EmployeeGRPCClient:
-    return EmployeeGRPCClient()
+def get_work_submission_commands(db: PostgresDB) -> WorkSubmissionCommands:
+    return WorkSubmissionCommands(db)
 
 
-EmployeeGRPCClientDep = Annotated[EmployeeGRPCClient, Depends(get_employee_grpc_client)]
+WorkSubmissionCommandsDep = Annotated[WorkSubmissionCommands, Depends(get_work_submission_commands)]
+
+
+def get_employee_queries(db: PostgresDB) -> EmployeeQueries:
+    return EmployeeQueries(db)
+
+
+EmployeeQueriesDep = Annotated[EmployeeQueries, Depends(get_employee_queries)]
 
 
 def get_work_submission_service(
-    work_submission_repo: WorkSubmissionRepositoryDep,
-    employee_client: EmployeeGRPCClientDep,
+    queries: WorkSubmissionQueriesDep,
+    commands: WorkSubmissionCommandsDep,
+    employee_queries: EmployeeQueriesDep,
 ) -> WorkSubmissionService:
-    return WorkSubmissionService(work_submission_repo, employee_client)
+    return WorkSubmissionService(queries, commands, employee_queries)
 
 
-WorkSubmissionServiceDep = Annotated[
-    WorkSubmissionService, Depends(get_work_submission_service)
-]
+WorkSubmissionServiceDep = Annotated[WorkSubmissionService, Depends(get_work_submission_service)]

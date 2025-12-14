@@ -8,52 +8,43 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies.database import get_db
 from app.modules.dashboard.repositories.dashboard_repository import DashboardRepository
 from app.modules.dashboard.services.dashboard_service import DashboardService
-from app.external_clients.grpc.employee_client import EmployeeGRPCClient
-from app.external_clients.grpc.org_unit_client import OrgUnitGRPCClient
+from app.modules.employees.repositories import EmployeeQueries
+from app.modules.org_units.repositories import OrgUnitQueries
 
 
-# Repository dependency
 def get_dashboard_repository(
     db: Annotated[AsyncSession, Depends(get_db)]
 ) -> DashboardRepository:
-    """Dependency for dashboard repository"""
     return DashboardRepository(db)
 
 
-DashboardRepositoryDep = Annotated[
-    DashboardRepository, Depends(get_dashboard_repository)
-]
+DashboardRepositoryDep = Annotated[DashboardRepository, Depends(get_dashboard_repository)]
 
 
-# gRPC Client dependencies
-def get_employee_grpc_client() -> EmployeeGRPCClient:
-    """Dependency for employee gRPC client"""
-    return EmployeeGRPCClient()
+def get_employee_queries(
+    db: Annotated[AsyncSession, Depends(get_db)]
+) -> EmployeeQueries:
+    return EmployeeQueries(db)
 
 
-EmployeeGRPCClientDep = Annotated[
-    EmployeeGRPCClient, Depends(get_employee_grpc_client)
-]
+EmployeeQueriesDep = Annotated[EmployeeQueries, Depends(get_employee_queries)]
 
 
-def get_org_unit_grpc_client() -> OrgUnitGRPCClient:
-    """Dependency for org_unit gRPC client"""
-    return OrgUnitGRPCClient()
+def get_org_unit_queries(
+    db: Annotated[AsyncSession, Depends(get_db)]
+) -> OrgUnitQueries:
+    return OrgUnitQueries(db)
 
 
-OrgUnitGRPCClientDep = Annotated[
-    OrgUnitGRPCClient, Depends(get_org_unit_grpc_client)
-]
+OrgUnitQueriesDep = Annotated[OrgUnitQueries, Depends(get_org_unit_queries)]
 
 
-# Service dependency (combines all dependencies)
 def get_dashboard_service(
     dashboard_repo: DashboardRepositoryDep,
-    employee_client: EmployeeGRPCClientDep,
-    org_unit_client: OrgUnitGRPCClientDep,
+    employee_queries: EmployeeQueriesDep,
+    org_unit_queries: OrgUnitQueriesDep,
 ) -> DashboardService:
-    """Dependency for dashboard service with all injected dependencies"""
-    return DashboardService(dashboard_repo, employee_client, org_unit_client)
+    return DashboardService(dashboard_repo, employee_queries, org_unit_queries)
 
 
 DashboardServiceDep = Annotated[DashboardService, Depends(get_dashboard_service)]

@@ -14,8 +14,8 @@ from app.modules.dashboard.schemas.responses import (
     AttendanceStatusToday,
 )
 from app.modules.dashboard.repositories.dashboard_repository import DashboardRepository
-from app.external_clients.grpc.employee_client import EmployeeGRPCClient
-from app.external_clients.grpc.org_unit_client import OrgUnitGRPCClient
+from app.modules.employees.repositories import EmployeeQueries
+from app.modules.org_units.repositories import OrgUnitQueries
 
 
 class DashboardService:
@@ -24,12 +24,47 @@ class DashboardService:
     def __init__(
         self,
         dashboard_repo: DashboardRepository,
-        employee_client: EmployeeGRPCClient,
-        org_unit_client: OrgUnitGRPCClient,
+        employee_queries: EmployeeQueries,
+        org_unit_queries: OrgUnitQueries,
     ):
         self.dashboard_repo = dashboard_repo
-        self.employee_client = employee_client
-        self.org_unit_client = org_unit_client
+        self.employee_queries = employee_queries
+        self.org_unit_queries = org_unit_queries
+
+    async def _get_employee_dict(self, employee_id: int):
+        emp = await self.employee_queries.get_by_id(employee_id)
+        if not emp:
+            return None
+        return {
+            "id": emp.id,
+            "name": emp.user.name if emp.user else None,
+            "employee_number": emp.employee_number,
+            "org_unit_id": emp.org_unit_id,
+            "position": emp.position,
+        }
+
+    async def _list_employees_dict(self, page=1, limit=100, org_unit_id=None, is_active=True):
+        from app.modules.employees.repositories import EmployeeFilters, PaginationParams
+        params = PaginationParams(page=page, limit=limit)
+        filters = EmployeeFilters(org_unit_id=org_unit_id, is_active=is_active)
+        employees, pagination = await self.employee_queries.list(params, filters)
+        return {
+            "employees": [{"id": e.id, "name": e.user.name if e.user else None} for e in employees],
+            "pagination": pagination.to_dict()
+        }
+
+    async def _get_org_unit_dict(self, org_unit_id: int):
+        ou = await self.org_unit_queries.get_by_id(org_unit_id)
+        if not ou:
+            return None
+        return {"id": ou.id, "name": ou.name}
+
+    async def _list_org_units_dict(self, page=1, limit=100):
+        from app.modules.org_units.repositories import OrgUnitFilters, PaginationParams
+        params = PaginationParams(page=page, limit=limit)
+        filters = OrgUnitFilters()
+        org_units, _ = await self.org_unit_queries.list(params, filters)
+        return {"org_units": [{"id": ou.id, "name": ou.name, "head_id": ou.head_id} for ou in org_units]}
 
     async def get_dashboard_summary(
         self,
@@ -116,7 +151,7 @@ class DashboardService:
 
         # Fetch employee data from gRPC (workforce service)
         try:
-            employee_data = await self.employee_client.get_employee(current_user.employee_id)
+            employee_data = await self._get_employee_dict(current_user.employee_id)
         except Exception as e:
             # Fallback if gRPC call fails
             return EmployeeWidget(
@@ -160,7 +195,7 @@ class DashboardService:
         department_name = None
         if employee_data.get("org_unit_id"):
             try:
-                org_unit_data = await self.org_unit_client.get_org_unit(
+                org_unit_data = await self._get_org_unit_dict(
                     employee_data["org_unit_id"]
                 )
                 department_name = org_unit_data.get("name")
@@ -191,12 +226,12 @@ class DashboardService:
         # Fetch employee counts from gRPC (workforce service)
         try:
             # Get total employees with filters
-            active_employees_data = await self.employee_client.list_employees(
+            active_employees_data = await self._list_employees_dict(
                 page=1, limit=1, is_active=True
             )
             total_active = active_employees_data.get("pagination", {}).get("total_items", 0)
 
-            inactive_employees_data = await self.employee_client.list_employees(
+            inactive_employees_data = await self._list_employees_dict(
                 page=1, limit=1, is_active=False
             )
             total_inactive = inactive_employees_data.get("pagination", {}).get("total_items", 0)
@@ -245,7 +280,7 @@ class DashboardService:
         try:
             # List all org_units and find which one has this employee as head
             # TODO: Add filter by head_employee_id to gRPC client
-            org_units_data = await self.org_unit_client.list_org_units(page=1, limit=100)
+            org_units_data = await self._list_org_units_dict(page=1, limit=100)
 
             headed_org_unit = None
             for org_unit in org_units_data.get("org_units", []):
@@ -255,14 +290,14 @@ class DashboardService:
                 pass
 
             # Alternative: Fetch employee data which might include org_unit_head info
-            employee_data = await self.employee_client.get_employee(current_user.employee_id)
+            employee_data = await self._get_employee_dict(current_user.employee_id)
             org_unit_id = employee_data.get("org_unit_id")
 
             if not org_unit_id:
                 return None  # Employee not assigned to org_unit
 
             # Get org_unit details
-            org_unit_data = await self.org_unit_client.get_org_unit(org_unit_id)
+            org_unit_data = await self._get_org_unit_dict(org_unit_id)
             org_unit_name = org_unit_data.get("name", "Unknown")
 
         except Exception:
@@ -270,7 +305,7 @@ class DashboardService:
 
         # Get team members from gRPC
         try:
-            team_data = await self.employee_client.list_employees(
+            team_data = await self._list_employees_dict(
                 page=1, limit=1000, org_unit_id=org_unit_id, is_active=True
             )
             team_employees = team_data.get("employees", [])
