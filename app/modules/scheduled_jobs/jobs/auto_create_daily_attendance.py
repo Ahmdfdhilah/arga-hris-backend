@@ -104,99 +104,99 @@ class AutoCreateDailyAttendanceJob(BaseScheduledJob):
 
                 logger.info(f"Ditemukan total {total_employees} karyawan aktif")
 
-                    # Iterate employees dan create attendance
-                    for employee in employees:
-                        employee_id = employee.get("id")
-                        org_unit_id = employee.get("org_unit_id")
-                        employee_type = employee.get("employee_type")
+                # Iterate employees dan create attendance
+                for employee in employees:
+                    employee_id = employee.get("id")
+                    org_unit_id = employee.get("org_unit_id")
+                    employee_type = employee.get("employee_type")
 
-                        if not employee_id:
-                            error_count += 1
+                    if not employee_id:
+                        error_count += 1
+                        continue
+
+                    try:
+                        # Jika hari Minggu, skip employee yang bukan on_site
+                        if is_sunday and employee_type != "on_site":
+                            logger.debug(
+                                f"Skip employee_id={employee_id} (type={employee_type}) "
+                                f"karena hari Minggu dan bukan on_site"
+                            )
+                            skipped_count += 1
                             continue
 
-                        try:
-                            # Jika hari Minggu, skip employee yang bukan on_site
-                            if is_sunday and employee_type != "on_site":
-                                logger.debug(
-                                    f"Skip employee_id={employee_id} (type={employee_type}) "
-                                    f"karena hari Minggu dan bukan on_site"
-                                )
-                                skipped_count += 1
-                                continue
-
-                            elif org_unit_id == 20:
-                                logger.debug(
-                                    f"Skip employee_id={employee_id} (type={employee_type}) "
-                                    f"karena direktorat"
-                                )
-                                skipped_count += 1
-                                continue
-
-                            # Cek apakah attendance sudah ada untuk employee & date ini
-                            existing = await attendance_queries.get_by_employee_and_date(
-                                employee_id=employee_id, attendance_date=today
-                            )
-
-                            if existing:
-                                logger.debug(
-                                    f"Attendance untuk employee_id={employee_id} "
-                                    f"tanggal {today} sudah ada, skip"
-                                )
-                                skipped_count += 1
-                                continue
-
-                            # Tentukan status berdasarkan employee_type
-                            # Hybrid employee: status "hybrid"
-                            # On_site dan employee lainnya: status "absent"
-                            if employee_type and employee_type.lower() == "hybrid":
-                                attendance_status = "hybrid"
-                            else:
-                                attendance_status = "absent"
-
-                            # Create attendance baru dengan status sesuai employee type
-                            attendance_data = {
-                                "employee_id": employee_id,
-                                "org_unit_id": org_unit_id,
-                                "attendance_date": today,
-                                "status": attendance_status,
-                            }
-
-                            await attendance_commands.create(attendance_data)
-                            created_count += 1
-
+                        elif org_unit_id == 20:
                             logger.debug(
-                                f"Attendance created untuk employee_id={employee_id}, "
-                                f"org_unit_id={org_unit_id}, status={attendance_status}"
+                                f"Skip employee_id={employee_id} (type={employee_type}) "
+                                f"karena direktorat"
                             )
+                            skipped_count += 1
+                            continue
 
-                        except Exception as e:
-                            logger.error(
-                                f"Error create attendance untuk employee_id={employee_id}: {e}"
+                        # Cek apakah attendance sudah ada untuk employee & date ini
+                        existing = await attendance_queries.get_by_employee_and_date(
+                            employee_id=employee_id, attendance_date=today
+                        )
+
+                        if existing:
+                            logger.debug(
+                                f"Attendance untuk employee_id={employee_id} "
+                                f"tanggal {today} sudah ada, skip"
                             )
-                            error_count += 1
+                            skipped_count += 1
+                            continue
 
-                    # Summary
-                    message = (
-                        f"Auto-create attendance selesai. "
-                        f"Total: {total_employees} karyawan, "
-                        f"Created: {created_count}, "
-                        f"Skipped: {skipped_count}, "
-                        f"Errors: {error_count}"
-                    )
+                        # Tentukan status berdasarkan employee_type
+                        # Hybrid employee: status "hybrid"
+                        # On_site dan employee lainnya: status "absent"
+                        if employee_type and employee_type.lower() == "hybrid":
+                            attendance_status = "hybrid"
+                        else:
+                            attendance_status = "absent"
 
-                    logger.info(message)
+                        # Create attendance baru dengan status sesuai employee type
+                        attendance_data = {
+                            "employee_id": employee_id,
+                            "org_unit_id": org_unit_id,
+                            "attendance_date": today,
+                            "status": attendance_status,
+                        }
 
-                    return {
-                        "success": True,
-                        "message": message,
-                        "data": {
-                            "date": today.isoformat(),
-                            "total_employees": total_employees,
-                            "created": created_count,
-                            "skipped": skipped_count,
-                            "errors": error_count,
-                        },
-                    }
+                        await attendance_commands.create(attendance_data)
+                        created_count += 1
+
+                        logger.debug(
+                            f"Attendance created untuk employee_id={employee_id}, "
+                            f"org_unit_id={org_unit_id}, status={attendance_status}"
+                        )
+
+                    except Exception as e:
+                        logger.error(
+                            f"Error create attendance untuk employee_id={employee_id}: {e}"
+                        )
+                        error_count += 1
+
+                # Summary
+                message = (
+                    f"Auto-create attendance selesai. "
+                    f"Total: {total_employees} karyawan, "
+                    f"Created: {created_count}, "
+                    f"Skipped: {skipped_count}, "
+                    f"Errors: {error_count}"
+                )
+
+                logger.info(message)
+
+                return {
+                    "success": True,
+                    "message": message,
+                    "data": {
+                        "date": today.isoformat(),
+                        "total_employees": total_employees,
+                        "created": created_count,
+                        "skipped": skipped_count,
+                        "errors": error_count,
+                    },
+                }
 
 
 

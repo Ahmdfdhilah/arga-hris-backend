@@ -80,8 +80,8 @@ async def get_current_user(
     """
     from app.modules.users.users.repositories.user_repository import UserRepository
     from app.modules.users.rbac.repositories.role_repository import RoleRepository
-    from app.external_clients.grpc.employee_client import EmployeeGRPCClient
-    from app.external_clients.grpc.org_unit_client import OrgUnitGRPCClient
+    # from app.grpc.clients.employee_client import EmployeeGRPCClient  # TODO: create if needed
+    # from app.grpc.clients.org_unit_client import OrgUnitGRPCClient  # TODO: create if needed
     from app.config.database import get_db
 
     try:

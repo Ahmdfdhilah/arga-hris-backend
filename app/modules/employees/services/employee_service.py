@@ -17,7 +17,7 @@ from app.modules.org_units.repositories import OrgUnitQueries
 from app.modules.employees.schemas import EmployeeResponse
 from app.modules.users.users.repositories import UserQueries, UserCommands
 from app.modules.users.rbac.repositories import RoleQueries
-from app.external_clients.grpc.sso_client import SSOUserGRPCClient
+from app.grpc.clients.sso_client import SSOUserGRPCClient
 from app.core.exceptions import NotFoundException, ConflictException, BadRequestException
 from app.core.messaging.event_publisher import EventPublisher
 

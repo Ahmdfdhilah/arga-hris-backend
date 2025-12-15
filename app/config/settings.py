@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     SSO_GRPC_HOST: str = Field(default="localhost")
     SSO_GRPC_PORT: int = Field(default=50051)
 
+    # gRPC Client Settings
+    GRPC_MAX_MESSAGE_SIZE: int = Field(default=15 * 1024 * 1024)
+    GRPC_TIMEOUT_SECONDS: int = Field(default=30)
+
     # Nominatim OpenStreetMap Geocoding Service
     NOMINATIM_BASE_URL: str = Field(
         default="https://nominatim.openstreetmap.org",
