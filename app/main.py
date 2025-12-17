@@ -43,11 +43,19 @@ async def lifespan(app: FastAPI):
     import app.modules.users.users.events  # noqa: F401 - registers handlers
     
     from app.core.messaging.consumer import EventConsumer, EventHandlerRegistry
+    from app.grpc import grpc_server
     
     consumer = None
     
     # Startup: Scheduler
     await setup_scheduler()
+    
+    # Startup: gRPC Server (for Employee/OrgUnit master data)
+    try:
+        await grpc_server.start()
+        logger.info("HRIS gRPC server started successfully")
+    except Exception as e:
+        logger.warning(f"gRPC server initialization failed: {e}. gRPC will not be available.")
     
     # Startup: RabbitMQ
     try:
@@ -78,6 +86,12 @@ async def lifespan(app: FastAPI):
             await consumer.stop()
         except Exception as e:
             logger.warning(f"Event consumer stop error: {e}")
+
+    # Shutdown: gRPC Server
+    try:
+        await grpc_server.stop()
+    except Exception as e:
+        logger.warning(f"gRPC server stop error: {e}")
 
     # Shutdown: RabbitMQ
     try:

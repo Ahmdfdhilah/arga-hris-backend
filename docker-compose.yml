@@ -59,8 +59,14 @@ services:
       ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: 30
 
-      WORKFORCE_GRPC_HOST: host.docker.internal
+      WORKFORCE_GRPC_HOST: localhost
       WORKFORCE_GRPC_PORT: 50051
+
+      RABBITMQ_HOST: localhost
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+      RABBITMQ_VHOST: /
 
       CORS_ORIGINS: "*"
     ports:

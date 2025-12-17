@@ -150,15 +150,15 @@ class EventConsumer:
                 # Skip own events (idempotency protection)
                 if event.source_service == self.service_name:
                     logger.debug(
-                        f"Skipping own event: {event.event_type} "
+                        f"Skipping own event: {event.get_routing_key()} "
                         f"from {event.source_service}"
                     )
                     return
                 
                 # Find handlers
-                handlers = EventHandlerRegistry.get_handlers(event.event_type)
+                handlers = EventHandlerRegistry.get_handlers(event.get_routing_key())
                 if not handlers:
-                    logger.warning(f"No handler registered for: {event.event_type}")
+                    logger.warning(f"No handler registered for: {event.get_routing_key()}")
                     return
                 
                 # Execute handlers
@@ -185,11 +185,12 @@ class EventConsumer:
                 timestamp = datetime.utcnow()
             
             return DomainEvent(
-                event_type=body.get("event_type", ""),
+                entity_type=body.get("entity_type", ""),
+                event_action=body.get("event_type", ""),  # Publisher sends action as "event_type"
                 entity_id=body.get("entity_id"),
                 data=body.get("data", {}),
                 timestamp=timestamp,
-                source_service=body.get("source_service", "unknown"),
+                source_service=body.get("source", body.get("source_service", "unknown")),
                 correlation_id=body.get("correlation_id", ""),
                 version=body.get("version", 1),
             )
@@ -209,7 +210,7 @@ class EventConsumer:
             # Check if handler wants to process this event
             if not await handler.can_handle(event):
                 logger.debug(
-                    f"{handler_class.__name__} skipped {event.event_type}"
+                    f"{handler_class.__name__} skipped {event.get_routing_key()}"
                 )
                 return
             

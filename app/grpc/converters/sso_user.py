@@ -1,11 +1,10 @@
 """
-gRPC Converters for HRIS Backend (Client-side)
+User/Auth Converters (Client-side)
 
-Functions to convert between protobuf messages and dicts.
+Convert SSO protobuf messages to dicts for HRIS consumption.
 """
 
-from typing import Dict, Any, Optional
-from datetime import datetime
+from typing import Dict, Any
 
 from proto.sso import user_pb2, auth_pb2
 
