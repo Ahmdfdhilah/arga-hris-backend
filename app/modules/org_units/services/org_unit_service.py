@@ -265,12 +265,7 @@ class OrgUnitService:
         self,
         org_unit_id: int,
         updated_by: str,
-        name: Optional[str] = None,
-        type: Optional[str] = None,
-        parent_id: Optional[int] = None,
-        head_id: Optional[int] = None,
-        description: Optional[str] = None,
-        is_active: Optional[bool] = None,
+        update_data: Dict[str, Any],
     ) -> OrgUnitResponse:
         """Update organization unit"""
         org_unit = await self.queries.get_by_id(org_unit_id)
@@ -283,49 +278,58 @@ class OrgUnitService:
         parent_changed = False
 
         # Validate parent change
-        if parent_id is not None and parent_id != org_unit.parent_id:
-            if parent_id == org_unit_id:
-                raise BadRequestException("Organization unit cannot be its own parent")
+        if "parent_id" in update_data:
+            parent_id = update_data["parent_id"]
+            if parent_id != org_unit.parent_id:
+                if parent_id is not None and parent_id == org_unit_id:
+                    raise BadRequestException(
+                        "Organization unit cannot be its own parent"
+                    )
 
-            parent = await self.queries.get_by_id(parent_id)
-            if not parent:
-                raise BadRequestException(
-                    f"Parent organization unit with ID {parent_id} not found"
-                )
+                if parent_id is not None:
+                    parent = await self.queries.get_by_id(parent_id)
+                    if not parent:
+                        raise BadRequestException(
+                            f"Parent organization unit with ID {parent_id} not found"
+                        )
 
-            # Check for circular hierarchy
-            if parent.path and str(org_unit_id) in parent.path.split("."):
-                raise BadRequestException("Circular hierarchy detected")
+                    # Check for circular hierarchy
+                    if parent.path and str(org_unit_id) in parent.path.split("."):
+                        raise BadRequestException("Circular hierarchy detected")
 
-            parent_changed = True
+                parent_changed = True
 
         # Validate head assignment
-        if head_id is not None:
-            await self._validate_head_assignment(head_id, org_unit_id)
+        if "head_id" in update_data:
+            head_id = update_data["head_id"]
+            if head_id is not None:
+                await self._validate_head_assignment(head_id, org_unit_id)
 
         # Update fields
-        if name is not None:
-            org_unit.name = name
-        if type is not None:
-            org_unit.type = type
-        if parent_id is not None:
-            org_unit.parent_id = parent_id
-        if head_id is not None:
-            org_unit.head_id = head_id
-        if description is not None:
-            org_unit.description = description
-        if is_active is not None:
-            org_unit.is_active = is_active
+        if "name" in update_data:
+            org_unit.name = update_data["name"]
+        if "type" in update_data:
+            org_unit.type = update_data["type"]
+        if "parent_id" in update_data:
+            org_unit.parent_id = update_data["parent_id"]
+        if "head_id" in update_data:
+            org_unit.head_id = update_data["head_id"]
+        if "description" in update_data:
+            org_unit.description = update_data["description"]
+        if "is_active" in update_data:
+            org_unit.is_active = update_data["is_active"]
 
         org_unit.set_updated_by(updated_by)
 
         await self.commands.update(org_unit)
 
         # Handle head change - update supervisor relationships
-        if head_id is not None and head_id != old_head_id and self.employee_queries:
-            await self._handle_head_change(
-                org_unit_id, old_head_id, head_id, updated_by
-            )
+        if "head_id" in update_data:
+            head_id = update_data["head_id"]
+            if head_id is not None and head_id != old_head_id and self.employee_queries:
+                await self._handle_head_change(
+                    org_unit_id, old_head_id, head_id, updated_by
+                )
 
         # Recalculate path if parent changed
         if parent_changed:

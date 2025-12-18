@@ -3,11 +3,12 @@ Employee Request Schemas
 """
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
-from typing import Optional, List
+from typing import Optional
 
 
 class EmployeeCreateRequest(BaseModel):
     """Create employee with SSO user account"""
+
     first_name: str = Field(..., min_length=1, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
     email: EmailStr
@@ -50,8 +51,11 @@ class EmployeeCreateRequest(BaseModel):
 
 class EmployeeUpdateRequest(BaseModel):
     """Update employee - profile changes sync to SSO"""
+
     first_name: Optional[str] = Field(None, min_length=1, max_length=100)
     last_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    email: Optional[EmailStr] = None
+    number: Optional[str] = Field(None, min_length=1, max_length=50)
     phone: Optional[str] = Field(None, max_length=50)
     gender: Optional[str] = None
     position: Optional[str] = Field(None, max_length=255)
@@ -59,6 +63,13 @@ class EmployeeUpdateRequest(BaseModel):
     org_unit_id: Optional[int] = Field(None, gt=0)
     supervisor_id: Optional[int] = None
     is_active: Optional[bool] = None
+
+    @field_validator("number")
+    @classmethod
+    def validate_number(cls, v):
+        if v is not None and not v.strip():
+            raise ValueError("Employee number cannot be empty")
+        return v.strip().upper() if v else v
 
     @field_validator("first_name", "last_name")
     @classmethod
@@ -84,6 +95,7 @@ class EmployeeUpdateRequest(BaseModel):
 
 class EmployeeBulkItem(BaseModel):
     """Single employee for bulk insert"""
+
     first_name: str = Field(..., min_length=1, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
     email: EmailStr

@@ -218,10 +218,8 @@ class EmployeeService:
         employee_type: Optional[str] = None,
         gender: Optional[str] = None,
         supervisor_id: Optional[int] = None,
-    ) -> Tuple[EmployeeResponse, Optional[str], Optional[List[str]]]:
-        warnings = []
+    ) -> EmployeeResponse:
         full_name = f"{first_name} {last_name}"
-        temp_password = None
 
         existing_number = await self.queries.get_by_number(number)
         if existing_number:
@@ -232,27 +230,25 @@ class EmployeeService:
             if not org_unit:
                 raise BadRequestException(f"OrgUnit with ID {org_unit_id} not found")
 
-        existing_sso = await self.sso_client.get_user_by_email(email)
-
-        if existing_sso:
-            sso_user = existing_sso
-            local_user = await self.user_queries.get_by_id(sso_user["id"])
-            if local_user:
-                existing_emp = await self.queries.get_by_user_id(local_user.id)
-                if existing_emp:
-                    warnings.append("Employee already registered for this account")
-                    return EmployeeResponse.model_validate(existing_emp), None, warnings
-        else:
-            create_result = await self.sso_client.create_user(
-                email=email, name=full_name, phone=phone, gender=gender, role="user"
-            )
-            if not create_result.get("success"):
+        # 1. Create SSO User (Strict Sync)
+        create_result = await self.sso_client.create_user(
+            email=email, name=full_name, phone=phone, gender=gender, role="user"
+        )
+        if not create_result.get("success"):
+            # Check if user already exists
+            existing_sso = await self.sso_client.get_user_by_email(email)
+            if existing_sso:
+                # User exists in SSO, proceed to link
+                sso_user = existing_sso
+            else:
+                # Genuine failure
                 raise ConflictException(
                     f"Failed to create SSO user: {create_result.get('error')}"
                 )
+        else:
             sso_user = create_result["user"]
-            temp_password = create_result.get("temporary_password")
 
+        # 2. Sync Local User
         local_user = await self.user_queries.get_by_id(sso_user["id"])
         if not local_user:
             local_user = await self.user_commands.create(
@@ -268,6 +264,13 @@ class EmployeeService:
                 }
             )
         else:
+            # Check if already linked to another employee
+            existing_emp = await self.queries.get_by_user_id(local_user.id)
+            if existing_emp:
+                raise ConflictException(
+                    f"User {email} is already linked to employee {existing_emp.number}"
+                )
+            # Update local user data
             await self.user_commands.update(
                 local_user.id,
                 {
@@ -280,10 +283,12 @@ class EmployeeService:
             )
             local_user = await self.user_queries.get_by_id(local_user.id)
 
+        # 3. Auto-assign Supervisor if needed
         auto_supervisor = supervisor_id
         if not auto_supervisor and org_unit_id:
             auto_supervisor = await self._auto_assign_supervisor(org_unit_id)
 
+        # 4. Create Employee
         employee = Employee(
             user_id=local_user.id,
             number=number,
@@ -298,33 +303,34 @@ class EmployeeService:
         created = await self.commands.create(employee)
         created = await self.queries.get_by_id(created.id)
 
+        # 5. Publish Event
         await self._publish_event("created", created)
 
-        return (
-            EmployeeResponse.model_validate(created),
-            temp_password,
-            warnings if warnings else None,
-        )
+        return EmployeeResponse.model_validate(created)
 
     async def update(
         self,
         employee_id: int,
         updated_by: str,
-        first_name: Optional[str] = None,
-        last_name: Optional[str] = None,
-        phone: Optional[str] = None,
-        gender: Optional[str] = None,
-        position: Optional[str] = None,
-        employee_type: Optional[str] = None,
-        org_unit_id: Optional[int] = None,
-        supervisor_id: Optional[int] = None,
-        is_active: Optional[bool] = None,
-    ) -> Tuple[EmployeeResponse, Optional[List[str]]]:
-        warnings = []
-
+        update_data: Dict[str, Any],
+    ) -> EmployeeResponse:
         employee = await self.queries.get_by_id(employee_id)
         if not employee:
             raise NotFoundException(f"Employee with ID {employee_id} not found")
+
+        # 0. Check Number Uniqueness
+        if "number" in update_data:
+            number = update_data["number"]
+            # number is Optional in UpdateRequest, so it could be None if someone explicitly sends null,
+            # though validate_number usually prevents empty strings.
+            # But uniqueness check only applies if it's a valid string.
+            if number and number != employee.number:
+                existing_number = await self.queries.get_by_number(number)
+                if existing_number:
+                    raise ConflictException(
+                        f"Employee number '{number}' already exists"
+                    )
+                employee.number = number
 
         if not employee.user_id:
             raise BadRequestException("Employee has no linked user")
@@ -333,61 +339,101 @@ class EmployeeService:
         if not local_user:
             raise NotFoundException(f"User with ID {employee.user_id} not found")
 
+        # 1. Prepare SSO Update Data
+        sso_update_fields = {}
         full_name = None
-        if first_name or last_name:
+
+        # Handle Name Construction
+        # If either first or last name is updated, we need to reconstruct full name
+        if "first_name" in update_data or "last_name" in update_data:
             existing_name = local_user.name or ""
             parts = existing_name.split(" ", 1)
-            fn = first_name if first_name else (parts[0] if len(parts) > 0 else "")
-            ln = last_name if last_name else (parts[1] if len(parts) > 1 else "")
+            # Default to existing parts
+            fn = parts[0] if len(parts) > 0 else ""
+            ln = parts[1] if len(parts) > 1 else ""
+
+            # Override with updates (if key exists, value is used even if None effectively clearing it)
+            if "first_name" in update_data:
+                fn = update_data["first_name"] or ""
+            if "last_name" in update_data:
+                ln = update_data["last_name"] or ""
+
             full_name = f"{fn} {ln}".strip()
+            sso_update_fields["name"] = full_name
 
-        if local_user.id and (full_name or phone or gender):
-            try:
-                sso_result = await self.sso_client.update_user(
-                    user_id=local_user.id, name=full_name, phone=phone, gender=gender
+        if "email" in update_data:
+            sso_update_fields["email"] = update_data["email"]
+        if "phone" in update_data:
+            sso_update_fields["phone"] = update_data["phone"]
+        if "gender" in update_data:
+            sso_update_fields["gender"] = update_data["gender"]
+
+        # 2. Update SSO User (Strict Sync)
+        if sso_update_fields:
+            sso_result = await self.sso_client.update_user(
+                user_id=local_user.id, **sso_update_fields
+            )
+            if not sso_result.get("success"):
+                raise ConflictException(
+                    f"Failed to update SSO user: {sso_result.get('error')}"
                 )
-                if sso_result.get("success"):
-                    sso_user = sso_result.get("user", {})
-                    update_data = {"synced_at": datetime.utcnow()}
-                    if full_name:
-                        update_data["name"] = sso_user.get("name", full_name)
-                    if phone:
-                        update_data["phone"] = sso_user.get("phone", phone)
-                    if gender:
-                        update_data["gender"] = sso_user.get("gender", gender)
-                    await self.user_commands.update(local_user.id, update_data)
-                else:
-                    warnings.append(f"SSO sync failed: {sso_result.get('error')}")
-            except Exception as e:
-                warnings.append(f"SSO sync failed: {e}")
 
-        if position is not None:
-            employee.position = position
-        if employee_type is not None:
-            employee.type = employee_type
-        if org_unit_id is not None:
-            employee.org_unit_id = org_unit_id
-        if supervisor_id is not None:
-            if supervisor_id == employee_id:
+            # 3. Update Local User
+            sso_user = sso_result.get("user", {})
+            local_user_update = {"synced_at": datetime.utcnow()}
+
+            # Map back fields from SSO response to ensure consistency
+            if "name" in sso_update_fields:
+                local_user_update["name"] = sso_user.get(
+                    "name", sso_update_fields["name"]
+                )
+            if "email" in sso_update_fields:
+                local_user_update["email"] = sso_user.get(
+                    "email", sso_update_fields["email"]
+                )
+            if "phone" in sso_update_fields:
+                local_user_update["phone"] = sso_user.get(
+                    "phone", sso_update_fields["phone"]
+                )
+            if "gender" in sso_update_fields:
+                local_user_update["gender"] = sso_user.get(
+                    "gender", sso_update_fields["gender"]
+                )
+
+            await self.user_commands.update(local_user.id, local_user_update)
+
+        # 4. Update Employee
+        if "position" in update_data:
+            employee.position = update_data["position"]
+        if "type" in update_data:
+            employee.type = update_data["type"]
+        if "org_unit_id" in update_data:
+            employee.org_unit_id = update_data["org_unit_id"]
+        if "supervisor_id" in update_data:
+            sid = update_data["supervisor_id"]
+            if sid is not None and sid == employee_id:
                 raise BadRequestException("Employee cannot be their own supervisor")
-            employee.supervisor_id = supervisor_id
-        if is_active is not None:
-            employee.is_active = is_active
+            employee.supervisor_id = sid
+        if "is_active" in update_data:
+            employee.is_active = update_data["is_active"]
+
+        employee.set_updated_by(updated_by)
+        await self.commands.update(employee)
 
         employee.set_updated_by(updated_by)
         await self.commands.update(employee)
 
         updated = await self.queries.get_by_id(employee_id)
+
+        # 4. Publish Event
         await self._publish_event("updated", updated)
 
-        return EmployeeResponse.model_validate(updated), warnings if warnings else None
+        return EmployeeResponse.model_validate(updated)
 
     async def delete(self, employee_id: int, deleted_by: str) -> Dict[str, Any]:
         employee = await self.queries.get_by_id(employee_id)
         if not employee:
             raise NotFoundException(f"Employee with ID {employee_id} not found")
-
-        warnings = []
 
         is_head = await self.org_unit_queries.is_head_of_any_unit(employee_id)
         if is_head:
@@ -399,14 +445,15 @@ class EmployeeService:
         if employee.user_id:
             local_user = await self.user_queries.get_by_id(employee.user_id)
 
+        # 1. Delete SSO User (Strict Sync)
         if local_user and local_user.id:
-            try:
-                result = await self.sso_client.delete_user(local_user.id)
-                if not result.get("success"):
-                    warnings.append(f"SSO deactivate failed: {result.get('error')}")
-            except Exception as e:
-                warnings.append(f"SSO deactivate failed: {e}")
+            result = await self.sso_client.delete_user(local_user.id)
+            if not result.get("success"):
+                raise ConflictException(
+                    f"Failed to delete SSO user: {result.get('error')}"
+                )
 
+        # 2. Reassign Subordinates
         subordinates = await self.queries.get_all_by_supervisor(employee_id)
         if subordinates:
             subordinate_ids = [s.id for s in subordinates]
@@ -414,15 +461,19 @@ class EmployeeService:
                 subordinate_ids, employee.supervisor_id, deleted_by
             )
 
+        # 3. Delete Employee
         await self.commands.delete(employee_id, deleted_by)
 
+        # 4. Deactivate Local User
         if local_user:
             await self.user_commands.deactivate(local_user.id)
 
         deleted = await self.queries.get_by_id_with_deleted(employee_id)
+
+        # 5. Publish Event
         await self._publish_event("deleted", deleted)
 
-        return {"success": True, "warnings": warnings if warnings else None}
+        return {"success": True}
 
     async def restore(self, employee_id: int) -> EmployeeResponse:
         employee = await self.queries.get_by_id_with_deleted(employee_id)

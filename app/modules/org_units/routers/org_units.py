@@ -183,7 +183,7 @@ async def create_org_unit(
 @router.post("/bulk-insert", response_model=DataResponse[BulkInsertResult])
 @require_role(["super_admin", "hr_admin"])
 async def bulk_insert_org_units(
-    service: OrgUnitServiceDep ,
+    service: OrgUnitServiceDep,
     file: UploadFile = File(..., description="Excel file dengan sheet 'Department'"),
     skip_errors: bool = Form(False, description="Skip item yang error"),
     current_user: CurrentUser = Depends(get_current_user),
@@ -204,7 +204,7 @@ async def bulk_insert_org_units(
     from app.modules.org_units.schemas.requests import OrgUnitBulkItem
 
     # Validate file type
-    if not file.filename or not file.filename.endswith(('.xlsx', '.xls')):
+    if not file.filename or not file.filename.endswith((".xlsx", ".xls")):
         return create_success_response(
             message="Invalid file type. Please upload an Excel file (.xlsx or .xls)",
             data=BulkInsertResult(
@@ -213,8 +213,8 @@ async def bulk_insert_org_units(
                 error_count=1,
                 errors=[{"error": "Invalid file type"}],
                 warnings=[],
-                created_ids=[]
-            )
+                created_ids=[],
+            ),
         )
 
     # Read file content
@@ -222,7 +222,9 @@ async def bulk_insert_org_units(
 
     # Parse Excel
     try:
-        parsed_data = ExcelParser.parse_org_units_sheet(file_content, sheet_name="Department")
+        parsed_data = ExcelParser.parse_org_units_sheet(
+            file_content, sheet_name="Department"
+        )
     except Exception as e:
         return create_success_response(
             message=f"Failed to parse Excel file: {str(e)}",
@@ -232,8 +234,8 @@ async def bulk_insert_org_units(
                 error_count=1,
                 errors=[{"error": f"Parse error: {str(e)}"}],
                 warnings=[],
-                created_ids=[]
-            )
+                created_ids=[],
+            ),
         )
 
     # Convert to OrgUnitBulkItem
@@ -255,8 +257,8 @@ async def bulk_insert_org_units(
                 error_count=len(parsed_data),
                 errors=[{"error": "No valid data found"}],
                 warnings=[],
-                created_ids=[]
-            )
+                created_ids=[],
+            ),
         )
 
     # Call service to bulk insert
@@ -268,7 +270,7 @@ async def bulk_insert_org_units(
 
     return create_success_response(
         message=f"Bulk insert completed: {result.success_count} sukses, {result.error_count} error",
-        data=result
+        data=result,
     )
 
 
@@ -285,15 +287,11 @@ async def update_org_unit(
 
     Hanya super_admin yang dapat mengupdate data unit organisasi master.
     """
+    update_data = request.model_dump(exclude_unset=True)
     data = await service.update_org_unit(
         org_unit_id=org_unit_id,
         updated_by=current_user.id,
-        name=request.name,
-        type=request.type,
-        parent_id=request.parent_id,
-        head_id=request.head_id,
-        description=request.description,
-        is_active=request.is_active,
+        update_data=update_data,
     )
     return create_success_response(message="Org unit berhasil diupdate", data=data)
 
@@ -301,6 +299,7 @@ async def update_org_unit(
 # ============================================================
 # Soft Delete Operations (IT Admin Only)
 # ============================================================
+
 
 @router.delete(
     "/{org_unit_id}/soft-delete", response_model=DataResponse[OrgUnitResponse]
