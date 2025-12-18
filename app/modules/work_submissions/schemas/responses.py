@@ -17,7 +17,7 @@ class WorkSubmissionResponse(BaseModel):
     )
     status: SubmissionStatus
     submitted_at: Optional[datetime] = None
-    created_by: Optional[int] = None
+    created_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

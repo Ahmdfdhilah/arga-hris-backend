@@ -14,7 +14,7 @@ class LeaveRequestResponse(BaseModel):
     end_date: date
     total_days: int
     reason: str
-    created_by: Optional[int] = None
+    created_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

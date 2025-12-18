@@ -63,33 +63,71 @@ class AttendanceService:
             "is_active": emp.is_active,
         }
 
-    async def _list_employees_dict(self, org_unit_id: int = None, page: int = 1, limit: int = 100) -> dict:
+    async def _list_employees_dict(
+        self, org_unit_id: int = None, page: int = 1, limit: int = 100
+    ) -> dict:
         """Helper to list employees as dict"""
         from app.modules.employees.repositories import EmployeeFilters, PaginationParams
+
         params = PaginationParams(page=page, limit=limit)
         filters = EmployeeFilters(org_unit_id=org_unit_id, is_active=True)
         employees, pagination = await self.employee_queries.list(params, filters)
         return {
-            "employees": [{"id": e.id, "name": e.user.name if e.user else None, "employee_number": e.employee_number, "employee_type": e.employee_type} for e in employees],
-            "pagination": pagination.to_dict()
+            "employees": [
+                {
+                    "id": e.id,
+                    "name": e.user.name if e.user else None,
+                    "employee_number": e.employee_number,
+                    "employee_type": e.employee_type,
+                }
+                for e in employees
+            ],
+            "pagination": pagination.to_dict(),
         }
 
-    async def _get_employees_by_org_unit_dict(self, org_unit_id: int, page: int = 1, limit: int = 100, include_children: bool = False) -> dict:
+    async def _get_employees_by_org_unit_dict(
+        self,
+        org_unit_id: int,
+        page: int = 1,
+        limit: int = 100,
+        include_children: bool = False,
+    ) -> dict:
         """Helper to get employees by org unit as dict"""
-        employees = await self.employee_queries.get_by_org_unit_id(org_unit_id, include_children=include_children)
+        employees = await self.employee_queries.get_by_org_unit_id(
+            org_unit_id, include_children=include_children
+        )
         return {
-            "employees": [{"id": e.id, "name": e.user.name if e.user else None, "employee_number": e.employee_number, "employee_type": e.employee_type, "org_unit_id": e.org_unit_id} for e in employees],
-            "pagination": {"total_items": len(employees)}
+            "employees": [
+                {
+                    "id": e.id,
+                    "name": e.user.name if e.user else None,
+                    "employee_number": e.employee_number,
+                    "employee_type": e.employee_type,
+                    "org_unit_id": e.org_unit_id,
+                }
+                for e in employees
+            ],
+            "pagination": {"total_items": len(employees)},
         }
 
-    async def _get_subordinates_dict(self, employee_id: int, page: int = 1, limit: int = 100, recursive: bool = False) -> dict:
+    async def _get_subordinates_dict(
+        self, employee_id: int, page: int = 1, limit: int = 100, recursive: bool = False
+    ) -> dict:
         """Helper to get subordinates as dict"""
-        subordinates = await self.employee_queries.get_subordinates(employee_id, recursive=recursive)
+        subordinates = await self.employee_queries.get_subordinates(
+            employee_id, recursive=recursive
+        )
         return {
-            "employees": [{"id": e.id, "name": e.user.name if e.user else None, "employee_number": e.employee_number} for e in subordinates],
-            "pagination": {"total_items": len(subordinates), "total_pages": 1}
+            "employees": [
+                {
+                    "id": e.id,
+                    "name": e.user.name if e.user else None,
+                    "employee_number": e.employee_number,
+                }
+                for e in subordinates
+            ],
+            "pagination": {"total_items": len(subordinates), "total_pages": 1},
         }
-
 
     def _validate_working_day_and_employee_type(
         self, check_date: date, employee_type: Optional[str]
@@ -128,9 +166,7 @@ class AttendanceService:
         Raises:
             ValidationException: Jika employee sedang cuti
         """
-        leave_request = await self.leave_queries.is_on_leave(
-            employee_id, check_date
-        )
+        leave_request = await self.leave_queries.is_on_leave(employee_id, check_date)
 
         if leave_request:
             raise ValidationException(
@@ -209,9 +245,7 @@ class AttendanceService:
         await self._validate_not_on_leave(employee_id, today)
 
         # Cek apakah sudah ada attendance hari ini
-        existing = await self.queries.get_by_employee_and_date(
-            employee_id, today
-        )
+        existing = await self.queries.get_by_employee_and_date(employee_id, today)
 
         if existing:
             if existing.check_in_time:
@@ -371,9 +405,7 @@ class AttendanceService:
         await self._validate_not_on_leave(employee_id, today)
 
         # Cek apakah sudah ada attendance hari ini
-        existing = await self.queries.get_by_employee_and_date(
-            employee_id, today
-        )
+        existing = await self.queries.get_by_employee_and_date(employee_id, today)
 
         if not existing or not existing.check_in_time:
             raise NotFoundException("Anda belum check-in hari ini")
@@ -748,7 +780,7 @@ class AttendanceService:
     async def bulk_mark_present(
         self,
         request: BulkMarkPresentRequest,
-        created_by: int,
+        created_by: str,
     ) -> BulkMarkPresentSummary:
         """
         Bulk mark present untuk semua employees pada tanggal tertentu.
@@ -870,9 +902,7 @@ class AttendanceService:
             is_working_day = True
 
         # Check leave status
-        leave_request = await self.leave_queries.is_on_leave(
-            employee_id, today
-        )
+        leave_request = await self.leave_queries.is_on_leave(employee_id, today)
         is_on_leave = leave_request is not None
 
         # Determine if can attend
@@ -1028,9 +1058,7 @@ class AttendanceService:
             "check_out_notes": final_notes,
         }
 
-        updated_attendance = await self.commands.update(
-            attendance_id, update_data
-        )
+        updated_attendance = await self.commands.update(attendance_id, update_data)
 
         if not updated_attendance:
             raise ValidationException("Gagal update attendance")

@@ -1,7 +1,7 @@
 from typing import Optional
 from datetime import date, datetime
 from decimal import Decimal
-from pydantic import BaseModel, Field, field_serializer, model_serializer
+from pydantic import BaseModel, Field, field_serializer
 from app.modules.attendance.schemas.shared import AttendanceStatus
 
 
@@ -17,7 +17,7 @@ class AttendanceResponse(BaseModel):
     check_out_time: Optional[datetime] = None
     work_hours: Optional[Decimal] = None
     overtime_hours: Optional[Decimal] = None
-    created_by: Optional[int] = None
+    created_by: Optional[str] = None
     check_in_submitted_at: Optional[datetime] = None
     check_in_submitted_ip: Optional[str] = None
     check_in_notes: Optional[str] = None
