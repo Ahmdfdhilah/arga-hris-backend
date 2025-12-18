@@ -80,8 +80,8 @@ jwt_public.pem
 
 .agent
 
-sql
-sql/dump
+# sql
+# sql/dump
 
 
 .claude

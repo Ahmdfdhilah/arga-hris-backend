@@ -4,10 +4,9 @@ Domain Event Definitions
 Standard event format for all HRIS domain events published to RabbitMQ.
 """
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, Optional
-from enum import Enum
 import uuid
 import json
 from app.core.enums.event_type import EventType

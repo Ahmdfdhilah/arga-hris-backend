@@ -8,10 +8,8 @@ Uses aio-pika for async operations.
 import asyncio
 import logging
 from typing import Optional
-from contextlib import asynccontextmanager
-
 import aio_pika
-from aio_pika import Channel, Connection, ExchangeType, Message
+from aio_pika import ExchangeType
 from aio_pika.abc import AbstractChannel, AbstractConnection, AbstractExchange
 
 from app.config.settings import settings

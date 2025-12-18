@@ -35,6 +35,13 @@ def _verify_token_locally(token: str) -> dict:
         )
         if payload.get("type") != "access":
             raise UnauthorizedException("Invalid token type")
+
+        token_client_id = payload.get("client_id")
+        if token_client_id != settings.CLIENT_ID:
+            raise UnauthorizedException(
+                f"Token not valid for this application. Expected '{settings.CLIENT_ID}', got '{token_client_id}'"
+            )
+
         return payload
     except JWTError as e:
         raise UnauthorizedException(f"Invalid token: {str(e)}")
