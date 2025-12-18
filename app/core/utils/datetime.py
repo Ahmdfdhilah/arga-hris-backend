@@ -1,5 +1,5 @@
 from datetime import datetime, timezone, date, timedelta
-from typing import  Tuple
+from typing import Tuple
 
 
 def get_date_range_from_type(period_type: str) -> Tuple[date, date]:
@@ -23,6 +23,9 @@ def get_date_range_from_type(period_type: str) -> Tuple[date, date]:
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+get_utc_now = utcnow
 
 
 def to_timestamp(dt: datetime) -> int:

@@ -2,7 +2,7 @@ from typing import Optional
 from datetime import datetime
 from app.modules.attendance.repositories import AttendanceQueries, AttendanceCommands
 from app.modules.attendance.schemas import AttendanceResponse
-from app.core.exceptions.client_error import NotFoundException, ValidationException
+from app.core.exceptions import NotFoundException, ValidationException
 from app.core.utils.file_upload import generate_signed_url_for_path
 
 

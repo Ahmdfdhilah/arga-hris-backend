@@ -26,14 +26,10 @@ class ListByOrgUnitUseCase:
 
         skip = (page - 1) * limit
 
-        employees = await self.queries.get_all_by_org_unit(
+        employees, total = await self.queries.get_all_by_org_unit(
             org_unit_id=org_unit_id,
             include_children=include_children,
             skip=skip,
             limit=limit,
-        )
-        total = await self.queries.count_by_org_unit(
-            org_unit_id=org_unit_id,
-            include_children=include_children,
         )
         return employees, total

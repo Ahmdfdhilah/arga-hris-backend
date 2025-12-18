@@ -29,11 +29,8 @@ class GetMyAttendanceUseCase:
             start_date, end_date = get_date_range_from_type(type)
 
         skip = (page - 1) * limit
-        attendances = await self.queries.list_by_employee(
+        attendances, total_items = await self.queries.list_by_employee(
             employee_id, start_date, end_date, skip, limit
-        )
-        total_items = await self.queries.count_by_employee(
-            employee_id, start_date, end_date
         )
 
         # Optimization: Get employee once

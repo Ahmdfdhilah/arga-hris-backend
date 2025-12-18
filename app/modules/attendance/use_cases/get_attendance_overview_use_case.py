@@ -1,11 +1,7 @@
 from typing import Optional, Tuple, List, Dict, Any
 from datetime import date
 from app.modules.attendance.repositories import AttendanceQueries
-from app.modules.employees.repositories import (
-    EmployeeQueries,
-    EmployeeFilters,
-    PaginationParams,
-)
+from app.modules.employees.repositories import EmployeeQueries
 from app.modules.attendance.schemas import EmployeeAttendanceOverview
 from app.core.exceptions.client_error import BadRequestException
 
@@ -23,42 +19,15 @@ class GetAttendanceOverviewUseCase:
         self, org_unit_id: Optional[int] = None, page: int = 1, limit: int = 100
     ) -> Dict[str, Any]:
         """Helper to list employees as dict"""
-        params = PaginationParams(page=page, limit=limit)
-        filters = EmployeeFilters(org_unit_id=org_unit_id, is_active=True)
-        # Note: If org_unit_id is provided, check if we need to use get_by_org_unit_id instead of list with filters
-        # The original service used different methods based on org_unit_id presence.
+        skip = (page - 1) * limit
+        employees, total = await self.employee_queries.list(
+            org_unit_id=org_unit_id,
+            is_active=True,
+            limit=limit,
+            skip=skip,
+        )
 
-        if org_unit_id:
-            employees = await self.employee_queries.get_by_org_unit_id(
-                org_unit_id, include_children=False
-            )
-            # To support pagination with get_by_org_unit_id we might need custom logic or just slice.
-            # Original service:
-            # if org_unit_id: calls _get_employees_by_org_unit_dict (which calls get_by_org_unit_id)
-            # else: calls _list_employees_dict (which calls list)
-
-            # Let's replicate original logic:
-            # But wait, get_by_org_unit_id returns list without pagination object in repository usually?
-            # Actually `employee_queries.get_by_org_unit_id` returns List[Employee].
-            # We need to manually paginate if the repo doesn't support it for that method.
-            # Or use the `list` method with filters if it supports org_unit_id.
-            # Looking at `_list_employees_dict` in original code (lines 66-86), it uses EmployeeFilters(org_unit_id=...).
-            # Looking at `_get_employees_by_org_unit_dict` (lines 88-111), it uses `get_by_org_unit_id`.
-            # Since we want to support pagination properly, using `list` with filters is safer if implemented correctly.
-            # However, let's stick to what we see.
-
-            # If `list` supports `org_unit_id`, we should use it.
-            # But let's assume `get_by_org_unit_id` is better for specific Org Unit logic?
-            # For now, I will use `list` if org_unit_id is None, and manual pagination if org_unit_id is set (if list doesn't cover it).
-
-            # Actually, creating a filter object suggests `list` supports it.
-            # `filters = EmployeeFilters(org_unit_id=org_unit_id, is_active=True)`
-            # If I use this for both cases, it simplifies things.
-
-            employees, pagination = await self.employee_queries.list(params, filters)
-        else:
-            filters = EmployeeFilters(is_active=True)
-            employees, pagination = await self.employee_queries.list(params, filters)
+        total_pages = (total + limit - 1) // limit if total > 0 else 0
 
         return {
             "employees": [
@@ -72,7 +41,12 @@ class GetAttendanceOverviewUseCase:
                 }
                 for e in employees
             ],
-            "pagination": pagination.to_dict(),
+            "pagination": {
+                "page": page,
+                "limit": limit,
+                "total_items": total,
+                "total_pages": total_pages,
+            },
         }
 
     async def execute(
@@ -89,15 +63,20 @@ class GetAttendanceOverviewUseCase:
             )
 
         # Simplified logic: Use list() for both cases as it supports org_unit_id filter
-        params = PaginationParams(page=page, limit=limit)
-        filters = EmployeeFilters(org_unit_id=org_unit_id, is_active=True)
-        employees, pagination = await self.employee_queries.list(params, filters)
+        skip = (page - 1) * limit
+        employees, total = await self.employee_queries.list(
+            org_unit_id=org_unit_id,
+            is_active=True,
+            limit=limit,
+            skip=skip,
+        )
 
         if not employees:
             pagination_dict = {
                 "page": page,
                 "limit": limit,
                 "total_items": 0,
+                "total_pages": 0,
             }
             return [], pagination_dict
 
@@ -170,5 +149,11 @@ class GetAttendanceOverviewUseCase:
             )
             overview_data.append(employee_overview)
 
-        pagination_dict = pagination.to_dict()
+        total_pages = (total + limit - 1) // limit if total > 0 else 0
+        pagination_dict = {
+            "page": page,
+            "limit": limit,
+            "total_items": total,
+            "total_pages": total_pages,
+        }
         return overview_data, pagination_dict

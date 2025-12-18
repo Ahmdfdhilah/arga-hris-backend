@@ -2,7 +2,7 @@
 LeaveRequest Query Repository - Read operations
 """
 
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from datetime import date
 from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +17,9 @@ class LeaveRequestQueries:
         self.db = db
 
     async def get_by_id(self, leave_request_id: int) -> Optional[LeaveRequest]:
-        result = await self.db.execute(select(LeaveRequest).where(LeaveRequest.id == leave_request_id))
+        result = await self.db.execute(
+            select(LeaveRequest).where(LeaveRequest.id == leave_request_id)
+        )
         return result.scalar_one_or_none()
 
     async def list_by_employee(
@@ -28,7 +30,7 @@ class LeaveRequestQueries:
         leave_type: Optional[str] = None,
         skip: int = 0,
         limit: int = 10,
-    ) -> List[LeaveRequest]:
+    ) -> Tuple[List[LeaveRequest], int]:
         query = select(LeaveRequest).where(LeaveRequest.employee_id == employee_id)
         if start_date:
             query = query.where(LeaveRequest.start_date >= start_date)
@@ -36,25 +38,17 @@ class LeaveRequestQueries:
             query = query.where(LeaveRequest.end_date <= end_date)
         if leave_type:
             query = query.where(LeaveRequest.leave_type == leave_type)
+
+        # Count query
+        count_query = select(func.count()).select_from(query.subquery())
+        total = (await self.db.execute(count_query)).scalar_one()
+
+        # Data query
         query = query.order_by(LeaveRequest.created_at.desc()).offset(skip).limit(limit)
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        items = list(result.scalars().all())
 
-    async def count_by_employee(
-        self,
-        employee_id: int,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
-        leave_type: Optional[str] = None,
-    ) -> int:
-        query = select(func.count(LeaveRequest.id)).where(LeaveRequest.employee_id == employee_id)
-        if start_date:
-            query = query.where(LeaveRequest.start_date >= start_date)
-        if end_date:
-            query = query.where(LeaveRequest.end_date <= end_date)
-        if leave_type:
-            query = query.where(LeaveRequest.leave_type == leave_type)
-        return (await self.db.execute(query)).scalar_one()
+        return items, total
 
     async def list_all(
         self,
@@ -64,7 +58,7 @@ class LeaveRequestQueries:
         leave_type: Optional[str] = None,
         skip: int = 0,
         limit: int = 10,
-    ) -> List[LeaveRequest]:
+    ) -> Tuple[List[LeaveRequest], int]:
         query = select(LeaveRequest)
         if employee_id is not None:
             query = query.where(LeaveRequest.employee_id == employee_id)
@@ -74,27 +68,17 @@ class LeaveRequestQueries:
             query = query.where(LeaveRequest.end_date <= end_date)
         if leave_type:
             query = query.where(LeaveRequest.leave_type == leave_type)
+
+        # Count query
+        count_query = select(func.count()).select_from(query.subquery())
+        total = (await self.db.execute(count_query)).scalar_one()
+
+        # Data query
         query = query.order_by(LeaveRequest.created_at.desc()).offset(skip).limit(limit)
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        items = list(result.scalars().all())
 
-    async def count_all(
-        self,
-        employee_id: Optional[int] = None,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
-        leave_type: Optional[str] = None,
-    ) -> int:
-        query = select(func.count(LeaveRequest.id))
-        if employee_id is not None:
-            query = query.where(LeaveRequest.employee_id == employee_id)
-        if start_date:
-            query = query.where(LeaveRequest.start_date >= start_date)
-        if end_date:
-            query = query.where(LeaveRequest.end_date <= end_date)
-        if leave_type:
-            query = query.where(LeaveRequest.leave_type == leave_type)
-        return (await self.db.execute(query)).scalar_one()
+        return items, total
 
     async def check_overlapping(
         self,
@@ -115,7 +99,9 @@ class LeaveRequestQueries:
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
-    async def is_on_leave(self, employee_id: int, check_date: date) -> Optional[LeaveRequest]:
+    async def is_on_leave(
+        self, employee_id: int, check_date: date
+    ) -> Optional[LeaveRequest]:
         query = select(LeaveRequest).where(
             and_(
                 LeaveRequest.employee_id == employee_id,
@@ -134,7 +120,7 @@ class LeaveRequestQueries:
         leave_type: Optional[str] = None,
         skip: int = 0,
         limit: int = 10,
-    ) -> List[LeaveRequest]:
+    ) -> Tuple[List[LeaveRequest], int]:
         query = select(LeaveRequest).where(LeaveRequest.employee_id.in_(employee_ids))
         if start_date:
             query = query.where(LeaveRequest.start_date >= start_date)
@@ -142,22 +128,14 @@ class LeaveRequestQueries:
             query = query.where(LeaveRequest.end_date <= end_date)
         if leave_type:
             query = query.where(LeaveRequest.leave_type == leave_type)
+
+        # Count query
+        count_query = select(func.count()).select_from(query.subquery())
+        total = (await self.db.execute(count_query)).scalar_one()
+
+        # Data query
         query = query.order_by(LeaveRequest.created_at.desc()).offset(skip).limit(limit)
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        items = list(result.scalars().all())
 
-    async def count_by_employees(
-        self,
-        employee_ids: List[int],
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
-        leave_type: Optional[str] = None,
-    ) -> int:
-        query = select(func.count(LeaveRequest.id)).where(LeaveRequest.employee_id.in_(employee_ids))
-        if start_date:
-            query = query.where(LeaveRequest.start_date >= start_date)
-        if end_date:
-            query = query.where(LeaveRequest.end_date <= end_date)
-        if leave_type:
-            query = query.where(LeaveRequest.leave_type == leave_type)
-        return (await self.db.execute(query)).scalar_one()
+        return items, total

@@ -7,10 +7,10 @@ from app.modules.leave_requests.repositories import (
 from app.modules.employees.repositories import EmployeeQueries
 from app.core.exceptions import NotFoundException
 from app.modules.leave_requests.utils.total_days import (
-    calculate_working_days,
     validate_no_overlapping_leave,
     validate_leave_dates,
 )
+from app.core.utils.workforce import calculate_working_days
 
 
 class CreateLeaveRequestUseCase:

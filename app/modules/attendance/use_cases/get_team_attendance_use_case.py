@@ -45,11 +45,8 @@ class GetTeamAttendanceUseCase:
             }
 
         skip = (page - 1) * limit
-        attendances = await self.queries.list_by_employees(
+        attendances, total_items = await self.queries.list_by_employees(
             subordinate_ids, start_date, end_date, status, skip, limit
-        )
-        total_items = await self.queries.count_by_employees(
-            subordinate_ids, start_date, end_date, status
         )
 
         attendances_data: List[AttendanceListResponse] = []

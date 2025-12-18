@@ -2,7 +2,7 @@
 OrgUnit Query Repository - Read operations
 """
 
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_, and_, text
 from sqlalchemy.orm import selectinload
@@ -56,7 +56,7 @@ class OrgUnitQueries:
         search: Optional[str] = None,
         skip: int = 0,
         limit: int = 10,
-    ) -> List[OrgUnit]:
+    ) -> Tuple[List[OrgUnit], int]:
         query = select(OrgUnit).where(OrgUnit.deleted_at.is_(None))
 
         if parent_id is not None:
@@ -71,39 +71,23 @@ class OrgUnitQueries:
                 or_(OrgUnit.name.ilike(pattern), OrgUnit.code.ilike(pattern))
             )
 
+        # Count query
+        count_query = select(func.count()).select_from(query.subquery())
+        total = (await self.db.execute(count_query)).scalar_one()
+
+        # Data query
         query = query.options(*self._base_options()).offset(skip).limit(limit)
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        items = list(result.scalars().all())
 
-    async def count(
-        self,
-        parent_id: Optional[int] = None,
-        type_filter: Optional[str] = None,
-        is_active: Optional[bool] = None,
-        search: Optional[str] = None,
-    ) -> int:
-        query = select(func.count(OrgUnit.id)).where(OrgUnit.deleted_at.is_(None))
-
-        if parent_id is not None:
-            query = query.where(OrgUnit.parent_id == parent_id)
-        if type_filter is not None:
-            query = query.where(OrgUnit.type == type_filter)
-        if is_active is not None:
-            query = query.where(OrgUnit.is_active == is_active)
-        if search:
-            pattern = f"%{search}%"
-            query = query.where(
-                or_(OrgUnit.name.ilike(pattern), OrgUnit.code.ilike(pattern))
-            )
-
-        return (await self.db.execute(query)).scalar_one()
+        return items, total
 
     async def list_deleted(
         self,
         search: Optional[str] = None,
         skip: int = 0,
         limit: int = 10,
-    ) -> List[OrgUnit]:
+    ) -> Tuple[List[OrgUnit], int]:
         query = select(OrgUnit).where(OrgUnit.deleted_at.is_not(None))
 
         if search:
@@ -112,6 +96,11 @@ class OrgUnitQueries:
                 or_(OrgUnit.name.ilike(pattern), OrgUnit.code.ilike(pattern))
             )
 
+        # Count query
+        count_query = select(func.count()).select_from(query.subquery())
+        total = (await self.db.execute(count_query)).scalar_one()
+
+        # Data query
         query = (
             query.options(*self._base_options())
             .offset(skip)
@@ -119,18 +108,9 @@ class OrgUnitQueries:
             .order_by(OrgUnit.deleted_at.desc())
         )
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        items = list(result.scalars().all())
 
-    async def count_deleted(self, search: Optional[str] = None) -> int:
-        query = select(func.count(OrgUnit.id)).where(OrgUnit.deleted_at.is_not(None))
-
-        if search:
-            pattern = f"%{search}%"
-            query = query.where(
-                or_(OrgUnit.name.ilike(pattern), OrgUnit.code.ilike(pattern))
-            )
-
-        return (await self.db.execute(query)).scalar_one()
+        return items, total
 
     async def get_children(
         self,
@@ -138,56 +118,33 @@ class OrgUnitQueries:
         recursive: bool = False,
         skip: int = 0,
         limit: int = 10,
-    ) -> List[OrgUnit]:
+    ) -> Tuple[List[OrgUnit], int]:
         if recursive:
             parent = await self.get_by_id(parent_id)
             if not parent:
-                return []
+                return [], 0  # Return empty tuple
 
-            query = (
-                select(OrgUnit)
-                .options(*self._base_options())
-                .where(
-                    and_(
-                        OrgUnit.path.like(f"{parent.path}.%"),
-                        OrgUnit.deleted_at.is_(None),
-                    )
-                )
-                .offset(skip)
-                .limit(limit)
-            )
-        else:
-            query = (
-                select(OrgUnit)
-                .options(*self._base_options())
-                .where(
-                    and_(OrgUnit.parent_id == parent_id, OrgUnit.deleted_at.is_(None))
-                )
-                .offset(skip)
-                .limit(limit)
-            )
-
-        result = await self.db.execute(query)
-        return list(result.scalars().all())
-
-    async def count_children(self, parent_id: int, recursive: bool = False) -> int:
-        if recursive:
-            parent = await self.get_by_id(parent_id)
-            if not parent:
-                return 0
-
-            query = select(func.count(OrgUnit.id)).where(
+            query = select(OrgUnit).where(
                 and_(
                     OrgUnit.path.like(f"{parent.path}.%"),
                     OrgUnit.deleted_at.is_(None),
                 )
             )
         else:
-            query = select(func.count(OrgUnit.id)).where(
+            query = select(OrgUnit).where(
                 and_(OrgUnit.parent_id == parent_id, OrgUnit.deleted_at.is_(None))
             )
 
-        return (await self.db.execute(query)).scalar_one()
+        # Count query
+        count_query = select(func.count()).select_from(query.subquery())
+        total = (await self.db.execute(count_query)).scalar_one()
+
+        # Data query
+        query = query.options(*self._base_options()).offset(skip).limit(limit)
+        result = await self.db.execute(query)
+        items = list(result.scalars().all())
+
+        return items, total
 
     async def get_ancestors(self, org_unit_id: int) -> List[OrgUnit]:
         query = text("""

@@ -2,7 +2,7 @@
 Employee Query Repository - Read operations
 """
 
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_, and_, text
 from sqlalchemy.orm import selectinload
@@ -70,7 +70,7 @@ class EmployeeQueries:
         search: Optional[str] = None,
         skip: int = 0,
         limit: int = 10,
-    ) -> List[Employee]:
+    ) -> Tuple[List[Employee], int]:
         query = select(Employee).where(Employee.deleted_at.is_not(None))
 
         if search:
@@ -83,6 +83,11 @@ class EmployeeQueries:
                 )
             )
 
+        # Count query
+        count_query = select(func.count()).select_from(query.subquery())
+        total = (await self.db.execute(count_query)).scalar_one()
+
+        # Data query
         query = (
             query.options(*self._base_options())
             .offset(skip)
@@ -90,22 +95,9 @@ class EmployeeQueries:
             .order_by(Employee.deleted_at.desc())
         )
         result = await self.db.execute(query)
-        return list(result.scalars().unique().all())
+        items = list(result.scalars().unique().all())
 
-    async def count_deleted(self, search: Optional[str] = None) -> int:
-        query = select(func.count(Employee.id)).where(Employee.deleted_at.is_not(None))
-
-        if search:
-            pattern = f"%{search}%"
-            query = query.outerjoin(User, Employee.user_id == User.id).where(
-                or_(
-                    User.name.ilike(pattern),
-                    User.email.ilike(pattern),
-                    Employee.number.ilike(pattern),
-                )
-            )
-
-        return (await self.db.execute(query)).scalar_one()
+        return items, total
 
     async def get_subordinates(
         self,
@@ -113,7 +105,7 @@ class EmployeeQueries:
         recursive: bool = False,
         skip: int = 0,
         limit: int = 10,
-    ) -> List[Employee]:
+    ) -> Tuple[List[Employee], int]:
         if recursive:
             data_cte = text("""
                 WITH RECURSIVE subordinates AS (
@@ -125,6 +117,17 @@ class EmployeeQueries:
                 )
                 SELECT id FROM subordinates LIMIT :limit OFFSET :offset
             """)
+            count_cte = text("""
+                WITH RECURSIVE subordinates AS (
+                    SELECT * FROM employees WHERE supervisor_id = :supervisor_id AND deleted_at IS NULL
+                    UNION ALL
+                    SELECT e.* FROM employees e
+                    INNER JOIN subordinates s ON e.supervisor_id = s.id
+                    WHERE e.deleted_at IS NULL
+                )
+                SELECT COUNT(*) FROM subordinates
+            """)
+
             rows = (
                 await self.db.execute(
                     data_cte,
@@ -137,79 +140,38 @@ class EmployeeQueries:
             ).fetchall()
 
             ids = [r[0] for r in rows]
+            items = []
             if ids:
                 emp_result = await self.db.execute(
                     select(Employee)
                     .options(*self._base_options())
                     .where(Employee.id.in_(ids))
                 )
-                return list(emp_result.scalars().unique().all())
-            return []
-        else:
-            query = (
-                select(Employee)
-                .options(*self._base_options())
-                .where(
-                    and_(
-                        Employee.supervisor_id == supervisor_id,
-                        Employee.deleted_at.is_(None),
-                    )
-                )
-                .offset(skip)
-                .limit(limit)
-            )
-            result = await self.db.execute(query)
-            return list(result.scalars().unique().all())
+                items = list(emp_result.scalars().unique().all())
 
-    async def count_subordinates(
-        self, supervisor_id: int, recursive: bool = False
-    ) -> int:
-        if recursive:
-            cte = text("""
-                WITH RECURSIVE subordinates AS (
-                    SELECT * FROM employees WHERE supervisor_id = :supervisor_id AND deleted_at IS NULL
-                    UNION ALL
-                    SELECT e.* FROM employees e
-                    INNER JOIN subordinates s ON e.supervisor_id = s.id
-                    WHERE e.deleted_at IS NULL
-                )
-                SELECT COUNT(*) FROM subordinates
-            """)
-            return (
-                await self.db.execute(cte, {"supervisor_id": supervisor_id})
+            total = (
+                await self.db.execute(count_cte, {"supervisor_id": supervisor_id})
             ).scalar_one()
+
+            return items, total
         else:
-            query = select(func.count(Employee.id)).where(
+            query = select(Employee).where(
                 and_(
                     Employee.supervisor_id == supervisor_id,
                     Employee.deleted_at.is_(None),
                 )
             )
-            return (await self.db.execute(query)).scalar_one()
 
-    async def count(
-        self,
-        org_unit_id: Optional[int] = None,
-        is_active: Optional[bool] = None,
-        search: Optional[str] = None,
-    ) -> int:
-        query = select(func.count(Employee.id)).where(Employee.deleted_at.is_(None))
+            # Count query
+            count_query = select(func.count()).select_from(query.subquery())
+            total = (await self.db.execute(count_query)).scalar_one()
 
-        if org_unit_id is not None:
-            query = query.where(Employee.org_unit_id == org_unit_id)
-        if is_active is not None:
-            query = query.where(Employee.is_active == is_active)
-        if search:
-            pattern = f"%{search}%"
-            query = query.outerjoin(User, Employee.user_id == User.id).where(
-                or_(
-                    User.name.ilike(pattern),
-                    User.email.ilike(pattern),
-                    Employee.number.ilike(pattern),
-                )
-            )
+            # Data query
+            query = query.options(*self._base_options()).offset(skip).limit(limit)
+            result = await self.db.execute(query)
+            items = list(result.scalars().unique().all())
 
-        return (await self.db.execute(query)).scalar_one()
+            return items, total
 
     async def list(
         self,
@@ -218,8 +180,8 @@ class EmployeeQueries:
         is_active: Optional[bool] = None,
         limit: int = 10,
         skip: int = 0,
-    ) -> List[Employee]:
-        query = select(Employee).options(*self._base_options())
+    ) -> Tuple[List[Employee], int]:
+        query = select(Employee)
 
         if org_unit_id:
             query = query.where(Employee.org_unit_id == org_unit_id)
@@ -238,10 +200,17 @@ class EmployeeQueries:
             )
 
         query = query.where(Employee.deleted_at.is_(None))
-        query = query.offset(skip).limit(limit)
 
+        # Count query
+        count_query = select(func.count()).select_from(query.subquery())
+        total = (await self.db.execute(count_query)).scalar_one()
+
+        # Data query
+        query = query.options(*self._base_options()).offset(skip).limit(limit)
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        items = list(result.scalars().all())
+
+        return items, total
 
     async def get_all_by_org_unit(
         self,
@@ -249,7 +218,7 @@ class EmployeeQueries:
         include_children: bool = False,
         skip: int = 0,
         limit: int = 10,
-    ) -> List[Employee]:
+    ) -> Tuple[List[Employee], int]:
         if include_children:
             from app.modules.org_units.models.org_unit import OrgUnit
 
@@ -257,63 +226,47 @@ class EmployeeQueries:
                 await self.db.execute(select(OrgUnit).where(OrgUnit.id == org_unit_id))
             ).scalar_one_or_none()
             if not org:
-                return []
+                return [], 0
 
+            # Base query logic
             query = (
                 select(Employee)
-                .options(*self._base_options())
                 .join(OrgUnit, Employee.org_unit_id == OrgUnit.id)
                 .where(
                     and_(
                         OrgUnit.path.like(f"{org.path}%"), Employee.deleted_at.is_(None)
                     )
                 )
-                .offset(skip)
-                .limit(limit)
             )
+
+            # Count logic
+            count_query = select(func.count()).select_from(query.subquery())
+            total = (await self.db.execute(count_query)).scalar_one()
+
+            # Data fetch
+            query = query.options(*self._base_options()).offset(skip).limit(limit)
             result = await self.db.execute(query)
-            return list(result.scalars().unique().all())
+            items = list(result.scalars().unique().all())
+
+            return items, total
         else:
-            query = (
-                select(Employee)
-                .options(*self._base_options())
-                .where(
-                    and_(
-                        Employee.org_unit_id == org_unit_id,
-                        Employee.deleted_at.is_(None),
-                    )
+            query = select(Employee).where(
+                and_(
+                    Employee.org_unit_id == org_unit_id,
+                    Employee.deleted_at.is_(None),
                 )
-                .offset(skip)
-                .limit(limit)
             )
+
+            # Count logic
+            count_query = select(func.count()).select_from(query.subquery())
+            total = (await self.db.execute(count_query)).scalar_one()
+
+            # Data fetch
+            query = query.options(*self._base_options()).offset(skip).limit(limit)
             result = await self.db.execute(query)
-            return list(result.scalars().unique().all())
+            items = list(result.scalars().unique().all())
 
-    async def count_by_org_unit(
-        self, org_unit_id: int, include_children: bool = False
-    ) -> int:
-        if include_children:
-            from app.modules.org_units.models.org_unit import OrgUnit
-
-            org = (
-                await self.db.execute(select(OrgUnit).where(OrgUnit.id == org_unit_id))
-            ).scalar_one_or_none()
-            if not org:
-                return 0
-
-            cnt = text("""
-                SELECT COUNT(e.id) FROM employees e
-                JOIN org_units o ON e.org_unit_id = o.id
-                WHERE o.path LIKE :pattern AND e.deleted_at IS NULL
-            """)
-            return (
-                await self.db.execute(cnt, {"pattern": f"{org.path}%"})
-            ).scalar_one()
-        else:
-            query = select(func.count(Employee.id)).where(
-                and_(Employee.org_unit_id == org_unit_id, Employee.deleted_at.is_(None))
-            )
-            return (await self.db.execute(query)).scalar_one()
+            return items, total
 
     async def get_all_by_supervisor(self, supervisor_id: int) -> List[Employee]:
         result = await self.db.execute(

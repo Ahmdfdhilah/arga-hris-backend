@@ -50,18 +50,12 @@ class ListMySubmissionsUseCase:
     ) -> Tuple[List[WorkSubmissionResponse], int]:
         skip = (page - 1) * limit
 
-        submissions = await self.queries.list_by_employee(
+        submissions, total = await self.queries.list_by_employee(
             employee_id=employee_id,
             submission_month=submission_month,
             status=status,
             skip=skip,
             limit=limit,
-        )
-
-        total = await self.queries.count_by_employee(
-            employee_id=employee_id,
-            submission_month=submission_month,
-            status=status,
         )
 
         response_data: List[WorkSubmissionResponse] = []
@@ -115,18 +109,12 @@ class ListAllSubmissionsUseCase:
     ) -> Tuple[List[WorkSubmissionListResponse], int]:
         skip = (page - 1) * limit
 
-        submissions = await self.queries.list_all(
+        submissions, total = await self.queries.list_all(
             employee_id=employee_id,
             submission_month=submission_month,
             status=status,
             skip=skip,
             limit=limit,
-        )
-
-        total = await self.queries.count_all(
-            employee_id=employee_id,
-            submission_month=submission_month,
-            status=status,
         )
 
         response_data: List[WorkSubmissionListResponse] = []

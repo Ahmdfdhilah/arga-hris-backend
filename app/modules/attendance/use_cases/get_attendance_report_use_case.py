@@ -2,11 +2,7 @@ from typing import List
 from datetime import date
 from decimal import Decimal
 from app.modules.attendance.repositories import AttendanceQueries
-from app.modules.employees.repositories import (
-    EmployeeQueries,
-    EmployeeFilters,
-    PaginationParams,
-)
+from app.modules.employees.repositories import EmployeeQueries
 from app.modules.attendance.schemas import (
     EmployeeAttendanceReport,
     AttendanceRecordInReport,
@@ -44,15 +40,21 @@ class GetAttendanceReportUseCase:
         limit = 200
 
         while True:
-            params = PaginationParams(page=page, limit=limit)
-            filters = EmployeeFilters(org_unit_id=org_unit_id, is_active=True)
-            employees, pagination = await self.employee_queries.list(
-                params, filters
-            )  # Assuming list supports org_unit_id
+            skip = (page - 1) * limit
+            employees, total = await self.employee_queries.list(
+                org_unit_id=org_unit_id,
+                is_active=True,
+                limit=limit,
+                skip=skip,
+            )
+
+            if not employees:
+                break
 
             all_employees.extend(employees)
 
-            if page >= pagination.total_pages:
+            total_pages = (total + limit - 1) // limit
+            if page >= total_pages:
                 break
             page += 1
 

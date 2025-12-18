@@ -1,6 +1,6 @@
 from typing import Optional
 from datetime import date
-from app.core.exceptions.client_error import ValidationException
+from app.core.exceptions import ValidationException
 from app.modules.leave_requests.repositories import LeaveRequestQueries
 from app.core.utils.workforce import (
     is_working_day,

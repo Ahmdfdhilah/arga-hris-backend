@@ -2,7 +2,7 @@
 WorkSubmission Query Repository - Read operations
 """
 
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from datetime import date
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +17,9 @@ class WorkSubmissionQueries:
         self.db = db
 
     async def get_by_id(self, submission_id: int) -> Optional[WorkSubmission]:
-        result = await self.db.execute(select(WorkSubmission).where(WorkSubmission.id == submission_id))
+        result = await self.db.execute(
+            select(WorkSubmission).where(WorkSubmission.id == submission_id)
+        )
         return result.scalar_one_or_none()
 
     async def list_by_employee(
@@ -27,28 +29,27 @@ class WorkSubmissionQueries:
         status: Optional[str] = None,
         skip: int = 0,
         limit: int = 10,
-    ) -> List[WorkSubmission]:
+    ) -> Tuple[List[WorkSubmission], int]:
         query = select(WorkSubmission).where(WorkSubmission.employee_id == employee_id)
         if submission_month:
             query = query.where(WorkSubmission.submission_month == submission_month)
         if status:
             query = query.where(WorkSubmission.status == status)
-        query = query.order_by(WorkSubmission.submission_month.desc()).offset(skip).limit(limit)
-        result = await self.db.execute(query)
-        return list(result.scalars().all())
 
-    async def count_by_employee(
-        self,
-        employee_id: int,
-        submission_month: Optional[date] = None,
-        status: Optional[str] = None,
-    ) -> int:
-        query = select(func.count(WorkSubmission.id)).where(WorkSubmission.employee_id == employee_id)
-        if submission_month:
-            query = query.where(WorkSubmission.submission_month == submission_month)
-        if status:
-            query = query.where(WorkSubmission.status == status)
-        return (await self.db.execute(query)).scalar_one()
+        # Count query
+        count_query = select(func.count()).select_from(query.subquery())
+        total = (await self.db.execute(count_query)).scalar_one()
+
+        # Data query
+        query = (
+            query.order_by(WorkSubmission.submission_month.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        result = await self.db.execute(query)
+        items = list(result.scalars().all())
+
+        return items, total
 
     async def list_all(
         self,
@@ -57,7 +58,7 @@ class WorkSubmissionQueries:
         status: Optional[str] = None,
         skip: int = 0,
         limit: int = 10,
-    ) -> List[WorkSubmission]:
+    ) -> Tuple[List[WorkSubmission], int]:
         query = select(WorkSubmission)
         if employee_id:
             query = query.where(WorkSubmission.employee_id == employee_id)
@@ -65,24 +66,21 @@ class WorkSubmissionQueries:
             query = query.where(WorkSubmission.submission_month == submission_month)
         if status:
             query = query.where(WorkSubmission.status == status)
-        query = query.order_by(WorkSubmission.submission_month.desc()).offset(skip).limit(limit)
-        result = await self.db.execute(query)
-        return list(result.scalars().all())
 
-    async def count_all(
-        self,
-        employee_id: Optional[int] = None,
-        submission_month: Optional[date] = None,
-        status: Optional[str] = None,
-    ) -> int:
-        query = select(func.count(WorkSubmission.id))
-        if employee_id:
-            query = query.where(WorkSubmission.employee_id == employee_id)
-        if submission_month:
-            query = query.where(WorkSubmission.submission_month == submission_month)
-        if status:
-            query = query.where(WorkSubmission.status == status)
-        return (await self.db.execute(query)).scalar_one()
+        # Count query
+        count_query = select(func.count()).select_from(query.subquery())
+        total = (await self.db.execute(count_query)).scalar_one()
+
+        # Data query
+        query = (
+            query.order_by(WorkSubmission.submission_month.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        result = await self.db.execute(query)
+        items = list(result.scalars().all())
+
+        return items, total
 
     async def check_existing(
         self,

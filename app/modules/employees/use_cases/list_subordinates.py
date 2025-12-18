@@ -24,14 +24,10 @@ class ListSubordinatesUseCase:
 
         skip = (page - 1) * limit
 
-        employees = await self.queries.get_subordinates(
+        employees, total = await self.queries.get_subordinates(
             supervisor_id=employee_id,
             recursive=recursive,
             skip=skip,
             limit=limit,
-        )
-        total = await self.queries.count_subordinates(
-            supervisor_id=employee_id,
-            recursive=recursive,
         )
         return employees, total

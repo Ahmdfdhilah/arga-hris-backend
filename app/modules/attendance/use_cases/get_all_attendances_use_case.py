@@ -41,7 +41,7 @@ class GetAllAttendancesUseCase:
 
         skip = (page - 1) * limit
 
-        attendances = await self.queries.list_all(
+        attendances, total_items = await self.queries.list_all(
             employee_ids=employee_ids,
             org_unit_id=org_unit_id,
             start_date=start_date,
@@ -49,14 +49,6 @@ class GetAllAttendancesUseCase:
             status=status,
             skip=skip,
             limit=limit,
-        )
-
-        total_items = await self.queries.count_all(
-            employee_ids=employee_ids,
-            org_unit_id=org_unit_id,
-            start_date=start_date,
-            end_date=end_date,
-            status=status,
         )
 
         attendances_data: List[AttendanceListResponse] = []

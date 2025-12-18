@@ -11,7 +11,7 @@ class GetAttendanceUseCase:
     async def execute(self, attendance_id: int) -> AttendanceResponse:
         attendance = await self.queries.get(
             attendance_id
-        )  # Assuming .get exists in queries, usually it does or get_by_id
+        ) 
 
         if not attendance:
             raise NotFoundException(

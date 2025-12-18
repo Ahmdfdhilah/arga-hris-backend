@@ -30,20 +30,13 @@ class ListMyLeaveRequestsUseCase:
 
         skip = (page - 1) * limit
 
-        leave_requests = await self.queries.list_by_employee(
+        leave_requests, total_items = await self.queries.list_by_employee(
             employee_id=employee_id,
             start_date=start_date,
             end_date=end_date,
             leave_type=leave_type,
             skip=skip,
             limit=limit,
-        )
-
-        total_items = await self.queries.count_by_employee(
-            employee_id=employee_id,
-            start_date=start_date,
-            end_date=end_date,
-            leave_type=leave_type,
         )
 
         items = [LeaveRequestResponse.model_validate(lr) for lr in leave_requests]
@@ -71,20 +64,13 @@ class ListAllLeaveRequestsUseCase:
 
         skip = (page - 1) * limit
 
-        leave_requests = await self.queries.list_all(
+        leave_requests, total_items = await self.queries.list_all(
             employee_id=employee_id,
             start_date=start_date,
             end_date=end_date,
             leave_type=leave_type,
             skip=skip,
             limit=limit,
-        )
-
-        total_items = await self.queries.count_all(
-            employee_id=employee_id,
-            start_date=start_date,
-            end_date=end_date,
-            leave_type=leave_type,
         )
 
         items = []
@@ -127,7 +113,8 @@ class ListTeamLeaveRequestsUseCase:
         limit: int = 10,
     ) -> Tuple[List[LeaveRequestListResponse], int]:
         # Get all subordinates recursively
-        subordinates = await self.employee_queries.get_subordinates(
+        # Fixed: get_subordinates returns (items, total)
+        subordinates, _ = await self.employee_queries.get_subordinates(
             employee_id, recursive=True
         )
 
@@ -143,20 +130,13 @@ class ListTeamLeaveRequestsUseCase:
 
         skip = (page - 1) * limit
 
-        leave_requests = await self.queries.list_by_employees(
+        leave_requests, total_items = await self.queries.list_by_employees(
             employee_ids=subordinate_ids,
             start_date=start_date,
             end_date=end_date,
             leave_type=leave_type,
             skip=skip,
             limit=limit,
-        )
-
-        total_items = await self.queries.count_by_employees(
-            employee_ids=subordinate_ids,
-            start_date=start_date,
-            end_date=end_date,
-            leave_type=leave_type,
         )
 
         items = []

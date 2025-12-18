@@ -20,17 +20,12 @@ class ListEmployeesUseCase:
         """Returns (items, total_count)"""
         skip = (page - 1) * limit
 
-        employees = await self.queries.list(
+        employees, total = await self.queries.list(
             org_unit_id=org_unit_id,
             is_active=is_active,
             search=search,
             skip=skip,
             limit=limit,
-        )
-        total = await self.queries.count(
-            org_unit_id=org_unit_id,
-            is_active=is_active,
-            search=search,
         )
         return employees, total
 
@@ -50,10 +45,9 @@ class ListDeletedEmployeesUseCase:
         """Returns (items, total_count)"""
         skip = (page - 1) * limit
 
-        employees = await self.queries.list_deleted(
+        employees, total = await self.queries.list_deleted(
             search=search,
             skip=skip,
             limit=limit,
         )
-        total = await self.queries.count_deleted(search=search)
         return employees, total

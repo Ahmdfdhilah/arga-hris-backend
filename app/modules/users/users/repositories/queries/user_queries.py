@@ -2,7 +2,7 @@
 User Query Repository - Read operations
 """
 
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from datetime import datetime, timedelta
@@ -31,38 +31,31 @@ class UserQueries:
         limit: int = 10,
         is_active: Optional[bool] = None,
         search: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ) -> Tuple[List[User], int]:
         offset = (page - 1) * limit
         stmt = select(User)
-        count_stmt = select(func.count()).select_from(User)
 
-        filters = []
+        # Build filters
+        conditions = []
         if is_active is not None:
-            filters.append(User.is_active == is_active)
+            conditions.append(User.is_active.is_(is_active))
         if search:
             pattern = f"%{search}%"
-            filters.append(or_(User.name.ilike(pattern), User.email.ilike(pattern)))
+            conditions.append(or_(User.name.ilike(pattern), User.email.ilike(pattern)))
 
-        if filters:
-            stmt = stmt.where(and_(*filters))
-            count_stmt = count_stmt.where(and_(*filters))
+        if conditions:
+            stmt = stmt.where(and_(*conditions))
 
+        # Count query
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total_items = (await self.db.execute(count_stmt)).scalar_one()
+
+        # Data query
         stmt = stmt.order_by(User.created_at.desc()).offset(offset).limit(limit)
         result = await self.db.execute(stmt)
         users = list(result.scalars().all())
 
-        total_items = (await self.db.execute(count_stmt)).scalar() or 0
-        total_pages = (total_items + limit - 1) // limit if total_items > 0 else 0
-
-        return {
-            "users": users,
-            "pagination": {
-                "page": page,
-                "limit": limit,
-                "total_items": total_items,
-                "total_pages": total_pages,
-            },
-        }
+        return users, total_items
 
     async def get_by_ids(self, user_ids: List[str]) -> List[User]:
         """Get multiple users by IDs"""
@@ -76,7 +69,6 @@ class UserQueries:
         stmt = (
             select(User)
             .where(or_(User.synced_at.is_(None), User.synced_at < threshold))
-            .where(User.is_active == True)
         )
         result = await self.db.execute(stmt)
         return list(result.scalars().all())

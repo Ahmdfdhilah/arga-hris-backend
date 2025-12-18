@@ -4,7 +4,7 @@ from app.modules.attendance.repositories import AttendanceQueries, AttendanceCom
 from app.modules.employees.repositories import EmployeeQueries
 from app.modules.leave_requests.repositories import LeaveRequestQueries
 from app.modules.attendance.schemas import CheckInRequest, AttendanceResponse
-from app.core.exceptions.client_error import ValidationException
+from app.core.exceptions import ValidationException
 from app.core.utils.file_upload import upload_file_to_gcp, generate_signed_url_for_path
 from app.core.utils.datetime import get_utc_now
 from app.config.settings import settings
