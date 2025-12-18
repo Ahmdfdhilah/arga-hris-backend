@@ -1,25 +1,26 @@
-from fastapi import APIRouter, Query, Depends, UploadFile, File, Form
 from typing import Optional
-from app.modules.org_units.dependencies import OrgUnitServiceDep
-from app.modules.org_units.schemas import (
-    OrgUnitCreateRequest,
-    OrgUnitUpdateRequest,
+from fastapi import APIRouter, Depends, Query, UploadFile, File, Form
+from app.modules.org_units.schemas.responses import (
     OrgUnitResponse,
-    OrgUnitHierarchyResponse,
     OrgUnitTypesResponse,
-    OrgUnitBulkInsertRequest,
+    OrgUnitHierarchyResponse,
     BulkInsertResult,
 )
-from app.core.utils import ExcelParser
+from app.modules.org_units.schemas.requests import (
+    OrgUnitCreateRequest,
+    OrgUnitUpdateRequest,
+)
+from app.modules.org_units.dependencies import OrgUnitServiceDep
+from app.modules.users.auth.dependencies import get_current_user, require_permission
+from app.modules.users.auth.schemas import CurrentUser
 from app.core.schemas import (
-    CurrentUser,
     DataResponse,
     PaginatedResponse,
     create_success_response,
     create_paginated_response,
 )
-from app.core.security.rbac import require_permission, require_role
-from app.core.dependencies.auth import get_current_user
+from app.core.security.rbac import require_role
+from app.core.utils import ExcelParser
 
 router = APIRouter(prefix="/org-units", tags=["Organization Units"])
 
@@ -244,7 +245,7 @@ async def bulk_insert_org_units(
         try:
             bulk_item = OrgUnitBulkItem(**item_data)
             bulk_items.append(bulk_item)
-        except Exception as e:
+        except Exception:
             # Skip invalid items but track them
             pass
 
