@@ -11,9 +11,10 @@ from app.modules.org_units.schemas.requests import (
     OrgUnitUpdateRequest,
 )
 from app.modules.org_units.dependencies import OrgUnitServiceDep
-from app.modules.users.auth.dependencies import get_current_user, require_permission
-from app.modules.users.auth.schemas import CurrentUser
+from app.core.dependencies.auth import get_current_user
+from app.core.security.rbac import require_permission
 from app.core.schemas import (
+    CurrentUser,
     DataResponse,
     PaginatedResponse,
     create_success_response,

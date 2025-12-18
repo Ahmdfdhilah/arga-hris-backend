@@ -12,7 +12,12 @@ from app.modules.leave_requests.schemas.responses import (
 )
 from app.core.dependencies.auth import get_current_user
 from app.core.security.rbac import require_permission
-from app.core.schemas import CurrentUser, DataResponse, PaginatedResponse
+from app.core.schemas import (
+    CurrentUser,
+    DataResponse,
+    PaginatedResponse,
+    create_paginated_response,
+)
 from app.core.exceptions import UnprocessableEntityException
 
 router = APIRouter(prefix="/leave-requests", tags=["Leave Requests"])
@@ -39,13 +44,20 @@ async def get_my_leave_requests(
 
     **Permission required**: leave_request.read_own
     """
-    return await service.get_my_leave_requests(
+    items, total_items = await service.get_my_leave_requests(
         employee_id=current_user.employee_id or 0,
         start_date=start_date,
         end_date=end_date,
         leave_type=leave_type,
         page=page,
         limit=limit,
+    )
+    return create_paginated_response(
+        message="Daftar leave request berhasil diambil",
+        data=items,
+        page=page,
+        limit=limit,
+        total_items=total_items,
     )
 
 
@@ -88,13 +100,20 @@ async def list_all_leave_requests(
 
     **Permission required**: leave_request.read_all
     """
-    return await service.list_all_leave_requests(
+    items, total_items = await service.list_all_leave_requests(
         employee_id=employee_id,
         start_date=start_date,
         end_date=end_date,
         leave_type=leave_type,
         page=page,
         limit=limit,
+    )
+    return create_paginated_response(
+        message="Daftar leave request berhasil diambil",
+        data=items,
+        page=page,
+        limit=limit,
+        total_items=total_items,
     )
 
 
@@ -171,11 +190,18 @@ async def get_team_leave_requests(
     if current_user.employee_id is None:
         raise UnprocessableEntityException("employee id tidak valid")
 
-    return await service.get_team_leave_requests(
+    items, total_items = await service.get_team_leave_requests(
         employee_id=current_user.employee_id,
         start_date=start_date,
         end_date=end_date,
         leave_type=leave_type,
         page=page,
         limit=limit,
+    )
+    return create_paginated_response(
+        message="Daftar leave request berhasil diambil",
+        data=items,
+        page=page,
+        limit=limit,
+        total_items=total_items,
     )

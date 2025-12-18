@@ -25,16 +25,17 @@ from app.core.exceptions import UnprocessableEntityException
 router = APIRouter(prefix="/work-submissions", tags=["Work Submissions"])
 
 
-@router.get(
-    "/my-submissions",
-    response_model=PaginatedResponse[WorkSubmissionResponse]
-)
+@router.get("/my-submissions", response_model=PaginatedResponse[WorkSubmissionResponse])
 @require_permission("work_submission.read_own")
 async def get_my_submissions(
     service: WorkSubmissionServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
-    submission_month: Optional[date] = Query(None, description="Filter berdasarkan bulan submission"),
-    status: Optional[str] = Query(None, description="Filter berdasarkan status (draft/submitted)"),
+    submission_month: Optional[date] = Query(
+        None, description="Filter berdasarkan bulan submission"
+    ),
+    status: Optional[str] = Query(
+        None, description="Filter berdasarkan status (draft/submitted)"
+    ),
     page: int = Query(1, ge=1, description="Nomor halaman"),
     limit: int = Query(10, ge=1, le=250, description="Jumlah item per halaman"),
 ) -> PaginatedResponse[WorkSubmissionResponse]:
@@ -48,7 +49,7 @@ async def get_my_submissions(
     if current_user.employee_id is None:
         raise UnprocessableEntityException("employee id tidak valid")
 
-    items, pagination = await service.get_my_submissions(
+    items, total = await service.get_my_submissions(
         employee_id=current_user.employee_id,
         submission_month=submission_month,
         status=status,
@@ -58,17 +59,13 @@ async def get_my_submissions(
     return create_paginated_response(
         message="Success",
         data=items,
-        page=pagination["page"],
-        limit=pagination["limit"],
-        total_items=pagination["total_items"],
+        page=page,
+        limit=limit,
+        total_items=total,
     )
 
 
-@router.post(
-    "/",
-    status_code=201,
-    response_model=DataResponse[WorkSubmissionResponse]
-)
+@router.post("/", status_code=201, response_model=DataResponse[WorkSubmissionResponse])
 @require_permission("work_submission.create")
 async def create_submission(
     request: WorkSubmissionCreateRequest,
@@ -89,10 +86,7 @@ async def create_submission(
     return create_success_response(message="Created", data=data)
 
 
-@router.get(
-    "/",
-    response_model=PaginatedResponse[WorkSubmissionListResponse]
-)
+@router.get("/", response_model=PaginatedResponse[WorkSubmissionListResponse])
 @require_permission("work_submission.read_all")
 async def list_all_submissions(
     service: WorkSubmissionServiceDep,
@@ -100,8 +94,12 @@ async def list_all_submissions(
     employee_id: Optional[int] = Query(
         None, description="Filter berdasarkan employee ID"
     ),
-    submission_month: Optional[date] = Query(None, description="Filter berdasarkan bulan submission"),
-    status: Optional[str] = Query(None, description="Filter berdasarkan status (draft/submitted)"),
+    submission_month: Optional[date] = Query(
+        None, description="Filter berdasarkan bulan submission"
+    ),
+    status: Optional[str] = Query(
+        None, description="Filter berdasarkan status (draft/submitted)"
+    ),
     page: int = Query(1, ge=1, description="Nomor halaman"),
     limit: int = Query(10, ge=1, le=250, description="Jumlah item per halaman"),
 ) -> PaginatedResponse[WorkSubmissionListResponse]:
@@ -110,7 +108,7 @@ async def list_all_submissions(
 
     **Permission required**: work_submission.read_all
     """
-    items, pagination = await service.list_all_submissions(
+    items, total = await service.list_all_submissions(
         employee_id=employee_id,
         submission_month=submission_month,
         status=status,
@@ -120,16 +118,13 @@ async def list_all_submissions(
     return create_paginated_response(
         message="Success",
         data=items,
-        page=pagination["page"],
-        limit=pagination["limit"],
-        total_items=pagination["total_items"],
+        page=page,
+        limit=limit,
+        total_items=total,
     )
 
 
-@router.get(
-    "/{submission_id}",
-    response_model=DataResponse[WorkSubmissionResponse]
-)
+@router.get("/{submission_id}", response_model=DataResponse[WorkSubmissionResponse])
 @require_permission("work_submission.read")
 async def get_submission(
     submission_id: int,
@@ -145,10 +140,7 @@ async def get_submission(
     return create_success_response(message="Success", data=data)
 
 
-@router.put(
-    "/{submission_id}",
-    response_model=DataResponse[WorkSubmissionResponse]
-)
+@router.put("/{submission_id}", response_model=DataResponse[WorkSubmissionResponse])
 @require_permission("work_submission.update")
 async def update_submission(
     submission_id: int,
@@ -168,10 +160,7 @@ async def update_submission(
     return create_success_response(message="Updated", data=data)
 
 
-@router.delete(
-    "/{submission_id}",
-    response_model=DataResponse[None]
-)
+@router.delete("/{submission_id}", response_model=DataResponse[None])
 @require_permission("work_submission.delete")
 async def delete_submission(
     submission_id: int,
@@ -195,7 +184,9 @@ async def upload_files(
     submission_id: int,
     service: WorkSubmissionServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
-    files: List[UploadFile] = File(..., description="Files untuk diupload (max 10 files)"),
+    files: List[UploadFile] = File(
+        ..., description="Files untuk diupload (max 10 files)"
+    ),
 ) -> DataResponse[WorkSubmissionResponse]:
     """
     Upload files ke work submission.
@@ -214,8 +205,7 @@ async def upload_files(
 
 
 @router.delete(
-    "/{submission_id}/files",
-    response_model=DataResponse[WorkSubmissionResponse]
+    "/{submission_id}/files", response_model=DataResponse[WorkSubmissionResponse]
 )
 @require_permission("work_submission.delete_file")
 async def delete_file(
