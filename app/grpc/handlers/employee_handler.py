@@ -5,10 +5,9 @@ Implements EmployeeService gRPC interface for HRIS master data.
 """
 
 import logging
-from typing import Optional
+from typing import Tuple
 
 import grpc
-from google.protobuf.timestamp_pb2 import Timestamp
 
 from proto.employee import employee_pb2, employee_pb2_grpc
 from proto.common import common_pb2
@@ -20,7 +19,6 @@ from app.modules.users.rbac.repositories.queries import RoleQueries
 from app.modules.employees.services.employee_service import EmployeeService
 from app.core.messaging.event_publisher import event_publisher
 from app.grpc.converters import employee_to_proto
-from app.grpc.utils import metadata_to_dict
 from app.core.exceptions import BadRequestException, NotFoundException
 
 logger = logging.getLogger(__name__)
@@ -29,18 +27,18 @@ logger = logging.getLogger(__name__)
 class EmployeeHandler(employee_pb2_grpc.EmployeeServiceServicer):
     """gRPC Handler for Employee master data operations."""
 
-    async def _get_service(self):
+    async def _get_service(self) -> Tuple[EmployeeService, AsyncSessionLocal]:
         """Create EmployeeService with all dependencies."""
         session = AsyncSessionLocal()
-        
+
         employee_queries = EmployeeQueries(session)
         employee_commands = EmployeeCommands(session)
         org_unit_queries = OrgUnitQueries(session)
         user_queries = UserQueries(session)
         user_commands = UserCommands(session)
         role_queries = RoleQueries(session)
-        
-        return EmployeeService(
+
+        service = EmployeeService(
             queries=employee_queries,
             commands=employee_commands,
             org_unit_queries=org_unit_queries,
@@ -48,7 +46,9 @@ class EmployeeHandler(employee_pb2_grpc.EmployeeServiceServicer):
             user_commands=user_commands,
             role_queries=role_queries,
             event_publisher=event_publisher,
-        ), session
+        )
+
+        return service, session
 
     async def GetEmployee(
         self,
@@ -57,14 +57,11 @@ class EmployeeHandler(employee_pb2_grpc.EmployeeServiceServicer):
     ) -> employee_pb2.Employee:
         """Get employee by ID."""
         logger.info(f"gRPC GetEmployee called: {request.employee_id}")
-        
+
         try:
             service, session = await self._get_service()
             async with session:
                 employee = await service.get(request.employee_id)
-                if not employee:
-                    await context.abort(grpc.StatusCode.NOT_FOUND, f"Employee {request.employee_id} tidak ditemukan")
-                
                 return employee_to_proto(employee)
         except BadRequestException as e:
             logger.warning(f"gRPC GetEmployee validation failed: {e}")
@@ -83,14 +80,17 @@ class EmployeeHandler(employee_pb2_grpc.EmployeeServiceServicer):
     ) -> employee_pb2.Employee:
         """Get employee by number."""
         logger.info(f"gRPC GetEmployeeByNumber called: {request.employee_number}")
-        
+
         try:
             service, session = await self._get_service()
             async with session:
                 employee = await service.get_by_number(request.employee_number)
                 if not employee:
-                    await context.abort(grpc.StatusCode.NOT_FOUND, f"Employee dengan nomor {request.employee_number} tidak ditemukan")
-                
+                    await context.abort(
+                        grpc.StatusCode.NOT_FOUND,
+                        f"Employee dengan nomor {request.employee_number} tidak ditemukan",
+                    )
+
                 return employee_to_proto(employee)
         except BadRequestException as e:
             logger.warning(f"gRPC GetEmployeeByNumber validation failed: {e}")
@@ -109,14 +109,17 @@ class EmployeeHandler(employee_pb2_grpc.EmployeeServiceServicer):
     ) -> employee_pb2.Employee:
         """Get employee by email."""
         logger.info(f"gRPC GetEmployeeByEmail called: {request.employee_email}")
-        
+
         try:
             service, session = await self._get_service()
             async with session:
                 employee = await service.get_by_email(request.employee_email)
                 if not employee:
-                    await context.abort(grpc.StatusCode.NOT_FOUND, f"Employee dengan email {request.employee_email} tidak ditemukan")
-                
+                    await context.abort(
+                        grpc.StatusCode.NOT_FOUND,
+                        f"Employee dengan email {request.employee_email} tidak ditemukan",
+                    )
+
                 return employee_to_proto(employee)
         except BadRequestException as e:
             logger.warning(f"gRPC GetEmployeeByEmail validation failed: {e}")
@@ -135,21 +138,27 @@ class EmployeeHandler(employee_pb2_grpc.EmployeeServiceServicer):
     ) -> employee_pb2.ListEmployeesResponse:
         """List employees with pagination."""
         logger.info("gRPC ListEmployees called")
-        
+
         try:
             service, session = await self._get_service()
             async with session:
                 page = request.pagination.page if request.pagination.page > 0 else 1
                 limit = request.pagination.limit if request.pagination.limit > 0 else 10
-                
-                employees, total = await service.list(
+
+                employees, total_dict = await service.list(
                     page=page,
                     limit=limit,
                     search=request.search if request.HasField("search") else None,
-                    org_unit_id=request.employee_org_unit_id if request.HasField("employee_org_unit_id") else None,
-                    is_active=request.is_active if request.HasField("is_active") else None,
+                    org_unit_id=request.employee_org_unit_id
+                    if request.HasField("employee_org_unit_id")
+                    else None,
+                    is_active=request.is_active
+                    if request.HasField("is_active")
+                    else None,
                 )
-                
+
+                total = total_dict["total_items"]
+
                 return employee_pb2.ListEmployeesResponse(
                     employees=[employee_to_proto(e) for e in employees],
                     pagination_info=common_pb2.PaginationInfo(
@@ -173,7 +182,7 @@ class EmployeeHandler(employee_pb2_grpc.EmployeeServiceServicer):
     ) -> employee_pb2.Employee:
         """Create new employee."""
         logger.info(f"gRPC CreateEmployee called: {request.employee_number}")
-        
+
         try:
             service, session = await self._get_service()
             async with session:
@@ -181,24 +190,38 @@ class EmployeeHandler(employee_pb2_grpc.EmployeeServiceServicer):
                 name_parts = request.employee_name.split(" ", 1)
                 first_name = name_parts[0]
                 last_name = name_parts[1] if len(name_parts) > 1 else ""
-                
+
                 employee = await service.create(
                     number=request.employee_number,
                     first_name=first_name,
                     last_name=last_name,
-                    email=request.employee_email if request.HasField("employee_email") else "",
+                    email=request.employee_email
+                    if request.HasField("employee_email")
+                    else "",
                     created_by=request.created_by,
-                    phone=request.employee_phone if request.HasField("employee_phone") else None,
-                    position=request.employee_position if request.HasField("employee_position") else None,
-                    employee_type=request.employee_type if request.HasField("employee_type") else None,
-                    gender=request.employee_gender if request.HasField("employee_gender") else None,
-                    org_unit_id=request.employee_org_unit_id if request.HasField("employee_org_unit_id") else None,
-                    supervisor_id=request.employee_supervisor_id if request.HasField("employee_supervisor_id") else None,
+                    phone=request.employee_phone
+                    if request.HasField("employee_phone")
+                    else None,
+                    position=request.employee_position
+                    if request.HasField("employee_position")
+                    else None,
+                    employee_type=request.employee_type
+                    if request.HasField("employee_type")
+                    else None,
+                    gender=request.employee_gender
+                    if request.HasField("employee_gender")
+                    else None,
+                    org_unit_id=request.employee_org_unit_id
+                    if request.HasField("employee_org_unit_id")
+                    else None,
+                    supervisor_id=request.employee_supervisor_id
+                    if request.HasField("employee_supervisor_id")
+                    else None,
                 )
-                
+
                 await session.commit()
                 return employee_to_proto(employee)
-                
+
         except BadRequestException as e:
             logger.warning(f"gRPC CreateEmployee validation failed: {e}")
             await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(e))
@@ -216,35 +239,42 @@ class EmployeeHandler(employee_pb2_grpc.EmployeeServiceServicer):
     ) -> employee_pb2.Employee:
         """Update employee."""
         logger.info(f"gRPC UpdateEmployee called: {request.employee_id}")
-        
+
         try:
             service, session = await self._get_service()
             async with session:
-                # Parse name if provided
-                first_name = None
-                last_name = None
+                update_data = {}
                 if request.HasField("employee_name"):
                     name_parts = request.employee_name.split(" ", 1)
-                    first_name = name_parts[0]
-                    last_name = name_parts[1] if len(name_parts) > 1 else ""
-                
+                    update_data["first_name"] = name_parts[0]
+                    update_data["last_name"] = (
+                        name_parts[1] if len(name_parts) > 1 else ""
+                    )
+
+                if request.HasField("employee_phone"):
+                    update_data["phone"] = request.employee_phone
+                if request.HasField("employee_gender"):
+                    update_data["gender"] = request.employee_gender
+                if request.HasField("employee_position"):
+                    update_data["position"] = request.employee_position
+                if request.HasField("employee_type"):
+                    update_data["type"] = request.employee_type
+                if request.HasField("employee_org_unit_id"):
+                    update_data["org_unit_id"] = request.employee_org_unit_id
+                if request.HasField("employee_supervisor_id"):
+                    update_data["supervisor_id"] = request.employee_supervisor_id
+                if request.HasField("is_active"):
+                    update_data["is_active"] = request.is_active
+
                 employee = await service.update(
                     employee_id=request.employee_id,
                     updated_by=request.updated_by,
-                    first_name=first_name,
-                    last_name=last_name,
-                    phone=request.employee_phone if request.HasField("employee_phone") else None,
-                    gender=request.employee_gender if request.HasField("employee_gender") else None,
-                    position=request.employee_position if request.HasField("employee_position") else None,
-                    employee_type=request.employee_type if request.HasField("employee_type") else None,
-                    org_unit_id=request.employee_org_unit_id if request.HasField("employee_org_unit_id") else None,
-                    supervisor_id=request.employee_supervisor_id if request.HasField("employee_supervisor_id") else None,
-                    is_active=request.is_active if request.HasField("is_active") else None,
+                    update_data=update_data,
                 )
-                
+
                 await session.commit()
                 return employee_to_proto(employee)
-                
+
         except BadRequestException as e:
             logger.warning(f"gRPC UpdateEmployee validation failed: {e}")
             await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(e))
@@ -262,13 +292,13 @@ class EmployeeHandler(employee_pb2_grpc.EmployeeServiceServicer):
     ) -> common_pb2.StatusResponse:
         """Delete employee."""
         logger.info(f"gRPC DeleteEmployee called: {request.employee_id}")
-        
+
         try:
             service, session = await self._get_service()
             async with session:
                 await service.delete(request.employee_id, request.deleted_by)
                 await session.commit()
-                
+
                 return common_pb2.StatusResponse(
                     success=True,
                     message=f"Employee {request.employee_id} berhasil dihapus",
@@ -287,16 +317,19 @@ class EmployeeHandler(employee_pb2_grpc.EmployeeServiceServicer):
     ) -> employee_pb2.ListEmployeesResponse:
         """Batch get employees by IDs."""
         logger.info(f"gRPC BatchGetEmployees called: {len(request.employee_ids)} IDs")
-        
+
         try:
             service, session = await self._get_service()
             async with session:
                 employees = []
                 for emp_id in request.employee_ids:
-                    emp = await service.get(emp_id)
-                    if emp:
-                        employees.append(employee_to_proto(emp))
-                
+                    try:
+                        emp = await service.get(emp_id)
+                        if emp:
+                            employees.append(employee_to_proto(emp))
+                    except NotFoundException:
+                        continue
+
                 return employee_pb2.ListEmployeesResponse(employees=employees)
         except Exception as e:
             logger.error(f"gRPC BatchGetEmployees failed: {e}", exc_info=True)
@@ -308,21 +341,25 @@ class EmployeeHandler(employee_pb2_grpc.EmployeeServiceServicer):
         context: grpc.aio.ServicerContext,
     ) -> employee_pb2.ListEmployeesResponse:
         """Get employee subordinates."""
-        logger.info(f"gRPC GetEmployeeSubordinates called: {request.employee_supervisor_id}")
-        
+        logger.info(
+            f"gRPC GetEmployeeSubordinates called: {request.employee_supervisor_id}"
+        )
+
         try:
             service, session = await self._get_service()
             async with session:
                 page = request.pagination.page if request.pagination.page > 0 else 1
                 limit = request.pagination.limit if request.pagination.limit > 0 else 10
-                
-                employees, total = await service.list_subordinates(
+
+                employees, total_dict = await service.list_subordinates(
                     employee_id=request.employee_supervisor_id,
                     page=page,
                     limit=limit,
                     recursive=request.recursive,
                 )
-                
+
+                total = total_dict["total_items"]
+
                 return employee_pb2.ListEmployeesResponse(
                     employees=[employee_to_proto(e) for e in employees],
                     pagination_info=common_pb2.PaginationInfo(
@@ -345,21 +382,25 @@ class EmployeeHandler(employee_pb2_grpc.EmployeeServiceServicer):
         context: grpc.aio.ServicerContext,
     ) -> employee_pb2.ListEmployeesResponse:
         """Get employees by org unit."""
-        logger.info(f"gRPC GetEmployeesByOrgUnit called: {request.employee_org_unit_id}")
-        
+        logger.info(
+            f"gRPC GetEmployeesByOrgUnit called: {request.employee_org_unit_id}"
+        )
+
         try:
             service, session = await self._get_service()
             async with session:
                 page = request.pagination.page if request.pagination.page > 0 else 1
                 limit = request.pagination.limit if request.pagination.limit > 0 else 10
-                
-                employees, total = await service.list_by_org_unit(
+
+                employees, total_dict = await service.list_by_org_unit(
                     org_unit_id=request.employee_org_unit_id,
                     page=page,
                     limit=limit,
                     include_children=request.include_children,
                 )
-                
+
+                total = total_dict["total_items"]
+
                 return employee_pb2.ListEmployeesResponse(
                     employees=[employee_to_proto(e) for e in employees],
                     pagination_info=common_pb2.PaginationInfo(
@@ -383,13 +424,21 @@ class EmployeeHandler(employee_pb2_grpc.EmployeeServiceServicer):
     ) -> employee_pb2.Employee:
         """Soft delete employee."""
         logger.info(f"gRPC SoftDeleteEmployee called: {request.employee_id}")
-        
+
         try:
             service, session = await self._get_service()
             async with session:
-                employee = await service.delete(request.employee_id, request.deleted_by_user_id)
-                await session.commit()
-                return employee_to_proto(employee)
+                # Fetch employee before deletion to return it
+                try:
+                    emp_before = await service.get(request.employee_id)
+                    await service.delete(
+                        request.employee_id, request.deleted_by_user_id
+                    )
+                    await session.commit()
+                    return employee_to_proto(emp_before)
+                except Exception as e:
+                    raise e
+
         except NotFoundException as e:
             logger.warning(f"gRPC SoftDeleteEmployee not found: {e}")
             await context.abort(grpc.StatusCode.NOT_FOUND, str(e))
@@ -404,7 +453,7 @@ class EmployeeHandler(employee_pb2_grpc.EmployeeServiceServicer):
     ) -> employee_pb2.Employee:
         """Restore soft-deleted employee."""
         logger.info(f"gRPC RestoreEmployee called: {request.employee_id}")
-        
+
         try:
             service, session = await self._get_service()
             async with session:
@@ -425,19 +474,21 @@ class EmployeeHandler(employee_pb2_grpc.EmployeeServiceServicer):
     ) -> employee_pb2.ListEmployeesResponse:
         """List soft-deleted employees."""
         logger.info("gRPC ListDeletedEmployees called")
-        
+
         try:
             service, session = await self._get_service()
             async with session:
                 page = request.pagination.page if request.pagination.page > 0 else 1
                 limit = request.pagination.limit if request.pagination.limit > 0 else 10
-                
-                employees, total = await service.list_deleted(
+
+                employees, total_dict = await service.list_deleted(
                     page=page,
                     limit=limit,
                     search=request.search if request.HasField("search") else None,
                 )
-                
+
+                total = total_dict["total_items"]
+
                 return employee_pb2.ListEmployeesResponse(
                     employees=[employee_to_proto(e) for e in employees],
                     pagination_info=common_pb2.PaginationInfo(

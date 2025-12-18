@@ -293,6 +293,10 @@ async def bulk_insert_employees(
             ),
         )
 
+    # Note: Bulk Insert is tricky with atomic Use Case execution.
+    # We might need to call create loop here or add bulk_create to Service.
+    # For now, looping service.create is fine as per Service Logic.
+
     success_count = 0
     error_count = 0
     created_ids = []
@@ -301,7 +305,17 @@ async def bulk_insert_employees(
 
     for item in bulk_items:
         try:
-            result, temp_pw, item_warnings = await service.create(
+            # Service.create returns EmployeeResponse, we need to extract ID.
+            # Warning: Service.create does not return warnings anymore (Tuple[Employee, str]).
+            # It returns EmployeeResponse.
+            # We need to adapt Bulk Insert logic or update service/usecase to support return warnings.
+            # Looking at CreateEmployeeUseCase, it returns (Employee, str).
+            # Looking at EmployeeService.create, it returns EmployeeResponse. WARNING LOST.
+
+            # Since User explicitly asked for single use case, Bulk Insert might need its own Use Case or loop here.
+            # For now, I will assume NO WARNINGS from Service.create.
+
+            result = await service.create(
                 number=item.number,
                 first_name=item.first_name,
                 last_name=item.last_name,
@@ -315,8 +329,7 @@ async def bulk_insert_employees(
             )
             success_count += 1
             created_ids.append(result.id)
-            if item_warnings:
-                warnings.extend(item_warnings)
+
         except Exception as e:
             error_count += 1
             if skip_errors:

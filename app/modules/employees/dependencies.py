@@ -7,10 +7,11 @@ from fastapi import Depends
 from app.core.dependencies.database import PostgresDB
 from app.modules.employees.repositories import EmployeeQueries, EmployeeCommands
 from app.modules.org_units.repositories import OrgUnitQueries
-from app.modules.employees.services.employee_service import EmployeeService
 from app.modules.users.users.repositories import UserQueries, UserCommands
 from app.modules.users.rbac.repositories import RoleQueries
 from app.core.messaging.event_publisher import EventPublisher, event_publisher
+
+from app.modules.employees.services.employee_service import EmployeeService
 
 
 def get_employee_queries(db: PostgresDB) -> EmployeeQueries:
@@ -72,7 +73,13 @@ def get_employee_service(
     publisher: EventPublisherDep,
 ) -> EmployeeService:
     return EmployeeService(
-        queries, commands, org_unit_queries, user_queries, user_commands, role_queries, publisher
+        queries,
+        commands,
+        org_unit_queries,
+        user_queries,
+        user_commands,
+        role_queries,
+        publisher,
     )
 
 
