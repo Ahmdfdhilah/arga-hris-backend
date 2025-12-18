@@ -22,7 +22,7 @@ from app.core.scheduler.base import BaseScheduledJob
 from app.config.database import get_db_context
 from app.modules.attendance.models.attendance import Attendance
 from app.modules.attendance.repositories import AttendanceQueries, AttendanceCommands
-from app.modules.employees.repositories import EmployeeQueries, EmployeeFilters, PaginationParams
+from app.modules.employees.repositories import EmployeeQueries
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,9 @@ class AutoCreateDailyAttendanceJob(BaseScheduledJob):
         error_count = 0
 
         if is_sunday:
-            logger.info(f"Memulai auto-create attendance untuk tanggal: {today} (hari Minggu - hanya on_site)")
+            logger.info(
+                f"Memulai auto-create attendance untuk tanggal: {today} (hari Minggu - hanya on_site)"
+            )
         else:
             logger.info(f"Memulai auto-create attendance untuk tanggal: {today}")
 
@@ -78,23 +80,30 @@ class AutoCreateDailyAttendanceJob(BaseScheduledJob):
                 limit = 200  # Max items per page
 
                 while True:
-                    params = PaginationParams(page=page, limit=limit)
-                    filters = EmployeeFilters(is_active=True)
-                    employees_list, pagination = await employee_queries.list(params, filters)
-                    
+                    skip = (page - 1) * limit
+                    employees_list = await employee_queries.list(
+                        is_active=True,
+                        skip=skip,
+                        limit=limit,
+                    )
+                    total = await employee_queries.count(is_active=True)
+                    total_pages = (total + limit - 1) // limit if limit > 0 else 0
+
                     for emp in employees_list:
-                        all_employees.append({
-                            "id": emp.id,
-                            "org_unit_id": emp.org_unit_id,
-                            "employee_type": emp.employee_type,
-                        })
+                        all_employees.append(
+                            {
+                                "id": emp.id,
+                                "org_unit_id": emp.org_unit_id,
+                                "employee_type": emp.type,
+                            }
+                        )
 
                     logger.info(
-                        f"Fetched page {page}/{pagination.total_pages}, "
+                        f"Fetched page {page}/{total_pages}, "
                         f"total employees so far: {len(all_employees)}"
                     )
 
-                    if page >= pagination.total_pages:
+                    if page >= total_pages:
                         break
 
                     page += 1
@@ -197,8 +206,6 @@ class AutoCreateDailyAttendanceJob(BaseScheduledJob):
                         "errors": error_count,
                     },
                 }
-
-
 
         except Exception as e:
             error_message = f"Error saat execute auto-create attendance: {str(e)}"

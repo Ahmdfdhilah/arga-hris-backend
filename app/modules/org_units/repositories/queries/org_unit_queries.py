@@ -2,56 +2,12 @@
 OrgUnit Query Repository - Read operations
 """
 
-from typing import Optional, List, Tuple
-from dataclasses import dataclass
+from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_, and_, text
 from sqlalchemy.orm import selectinload
 
 from app.modules.org_units.models.org_unit import OrgUnit
-
-
-@dataclass
-class OrgUnitFilters:
-    parent_id: Optional[int] = None
-    type_: Optional[str] = None
-    is_active: Optional[bool] = None
-    search: Optional[str] = None
-
-
-@dataclass
-class PaginationParams:
-    page: int = 1
-    limit: int = 10
-
-    def __post_init__(self):
-        self.page = max(1, self.page)
-        self.limit = min(max(1, self.limit), 100)
-
-    @property
-    def offset(self) -> int:
-        return (self.page - 1) * self.limit
-
-
-@dataclass
-class PaginationResult:
-    page: int
-    limit: int
-    total_items: int
-
-    @property
-    def total_pages(self) -> int:
-        return (
-            (self.total_items + self.limit - 1) // self.limit if self.limit > 0 else 0
-        )
-
-    def to_dict(self) -> dict:
-        return {
-            "page": self.page,
-            "limit": self.limit,
-            "total_items": self.total_items,
-            "total_pages": self.total_pages,
-        }
 
 
 class OrgUnitQueries:
@@ -93,91 +49,100 @@ class OrgUnitQueries:
         return result.scalar_one_or_none()
 
     async def list(
-        self, params: PaginationParams, filters: OrgUnitFilters
-    ) -> Tuple[List[OrgUnit], PaginationResult]:
+        self,
+        parent_id: Optional[int] = None,
+        type_filter: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        search: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 10,
+    ) -> List[OrgUnit]:
         query = select(OrgUnit).where(OrgUnit.deleted_at.is_(None))
-        count_query = select(func.count(OrgUnit.id)).where(OrgUnit.deleted_at.is_(None))
 
-        if filters.parent_id is not None:
-            query = query.where(OrgUnit.parent_id == filters.parent_id)
-            count_query = count_query.where(OrgUnit.parent_id == filters.parent_id)
-        if filters.type_ is not None:
-            query = query.where(OrgUnit.type == filters.type_)
-            count_query = count_query.where(OrgUnit.type == filters.type_)
-        if filters.is_active is not None:
-            query = query.where(OrgUnit.is_active == filters.is_active)
-            count_query = count_query.where(OrgUnit.is_active == filters.is_active)
-        if filters.search:
-            pattern = f"%{filters.search}%"
+        if parent_id is not None:
+            query = query.where(OrgUnit.parent_id == parent_id)
+        if type_filter is not None:
+            query = query.where(OrgUnit.type == type_filter)
+        if is_active is not None:
+            query = query.where(OrgUnit.is_active == is_active)
+        if search:
+            pattern = f"%{search}%"
             query = query.where(
                 or_(OrgUnit.name.ilike(pattern), OrgUnit.code.ilike(pattern))
             )
-            count_query = count_query.where(
+
+        query = query.options(*self._base_options()).offset(skip).limit(limit)
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def count(
+        self,
+        parent_id: Optional[int] = None,
+        type_filter: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        search: Optional[str] = None,
+    ) -> int:
+        query = select(func.count(OrgUnit.id)).where(OrgUnit.deleted_at.is_(None))
+
+        if parent_id is not None:
+            query = query.where(OrgUnit.parent_id == parent_id)
+        if type_filter is not None:
+            query = query.where(OrgUnit.type == type_filter)
+        if is_active is not None:
+            query = query.where(OrgUnit.is_active == is_active)
+        if search:
+            pattern = f"%{search}%"
+            query = query.where(
                 or_(OrgUnit.name.ilike(pattern), OrgUnit.code.ilike(pattern))
             )
 
-        total = (await self.db.execute(count_query)).scalar_one()
-        query = (
-            query.options(*self._base_options())
-            .offset(params.offset)
-            .limit(params.limit)
-        )
-        result = await self.db.execute(query)
-
-        return list(result.scalars().all()), PaginationResult(
-            params.page, params.limit, total
-        )
+        return (await self.db.execute(query)).scalar_one()
 
     async def list_deleted(
-        self, params: PaginationParams, search: Optional[str] = None
-    ) -> Tuple[List[OrgUnit], PaginationResult]:
+        self,
+        search: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 10,
+    ) -> List[OrgUnit]:
         query = select(OrgUnit).where(OrgUnit.deleted_at.is_not(None))
-        count_query = select(func.count(OrgUnit.id)).where(
-            OrgUnit.deleted_at.is_not(None)
-        )
 
         if search:
             pattern = f"%{search}%"
             query = query.where(
                 or_(OrgUnit.name.ilike(pattern), OrgUnit.code.ilike(pattern))
             )
-            count_query = count_query.where(
-                or_(OrgUnit.name.ilike(pattern), OrgUnit.code.ilike(pattern))
-            )
 
-        total = (await self.db.execute(count_query)).scalar_one()
         query = (
             query.options(*self._base_options())
-            .offset(params.offset)
-            .limit(params.limit)
+            .offset(skip)
+            .limit(limit)
             .order_by(OrgUnit.deleted_at.desc())
         )
         result = await self.db.execute(query)
+        return list(result.scalars().all())
 
-        return list(result.scalars().all()), PaginationResult(
-            params.page, params.limit, total
-        )
+    async def count_deleted(self, search: Optional[str] = None) -> int:
+        query = select(func.count(OrgUnit.id)).where(OrgUnit.deleted_at.is_not(None))
+
+        if search:
+            pattern = f"%{search}%"
+            query = query.where(
+                or_(OrgUnit.name.ilike(pattern), OrgUnit.code.ilike(pattern))
+            )
+
+        return (await self.db.execute(query)).scalar_one()
 
     async def get_children(
         self,
         parent_id: int,
         recursive: bool = False,
-        params: Optional[PaginationParams] = None,
-    ) -> Tuple[List[OrgUnit], PaginationResult]:
-        if params is None:
-            params = PaginationParams()
-
+        skip: int = 0,
+        limit: int = 10,
+    ) -> List[OrgUnit]:
         if recursive:
             parent = await self.get_by_id(parent_id)
             if not parent:
-                return [], PaginationResult(params.page, params.limit, 0)
-
-            count_query = select(func.count(OrgUnit.id)).where(
-                and_(
-                    OrgUnit.path.like(f"{parent.path}.%"), OrgUnit.deleted_at.is_(None)
-                )
-            )
-            total = (await self.db.execute(count_query)).scalar_one()
+                return []
 
             query = (
                 select(OrgUnit)
@@ -188,30 +153,41 @@ class OrgUnitQueries:
                         OrgUnit.deleted_at.is_(None),
                     )
                 )
-                .offset(params.offset)
-                .limit(params.limit)
+                .offset(skip)
+                .limit(limit)
             )
-            result = await self.db.execute(query)
-            org_units = list(result.scalars().all())
         else:
-            count_query = select(func.count(OrgUnit.id)).where(
-                and_(OrgUnit.parent_id == parent_id, OrgUnit.deleted_at.is_(None))
-            )
-            total = (await self.db.execute(count_query)).scalar_one()
-
             query = (
                 select(OrgUnit)
                 .options(*self._base_options())
                 .where(
                     and_(OrgUnit.parent_id == parent_id, OrgUnit.deleted_at.is_(None))
                 )
-                .offset(params.offset)
-                .limit(params.limit)
+                .offset(skip)
+                .limit(limit)
             )
-            result = await self.db.execute(query)
-            org_units = list(result.scalars().all())
 
-        return org_units, PaginationResult(params.page, params.limit, total)
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def count_children(self, parent_id: int, recursive: bool = False) -> int:
+        if recursive:
+            parent = await self.get_by_id(parent_id)
+            if not parent:
+                return 0
+
+            query = select(func.count(OrgUnit.id)).where(
+                and_(
+                    OrgUnit.path.like(f"{parent.path}.%"),
+                    OrgUnit.deleted_at.is_(None),
+                )
+            )
+        else:
+            query = select(func.count(OrgUnit.id)).where(
+                and_(OrgUnit.parent_id == parent_id, OrgUnit.deleted_at.is_(None))
+            )
+
+        return (await self.db.execute(query)).scalar_one()
 
     async def get_ancestors(self, org_unit_id: int) -> List[OrgUnit]:
         query = text("""
@@ -297,7 +273,7 @@ class OrgUnitQueries:
             select(func.count(Employee.id)).where(
                 and_(
                     Employee.org_unit_id == org_unit_id,
-                    Employee.is_active == True,
+                    Employee.is_active.is_(True),
                     Employee.deleted_at.is_(None),
                 )
             )
@@ -319,18 +295,3 @@ class OrgUnitQueries:
             select(OrgUnit).options(*self._base_options()).where(OrgUnit.id.in_(ids))
         )
         return list(result.scalars().all())
-
-    async def count(self, filters: OrgUnitFilters) -> int:
-        query = select(func.count(OrgUnit.id)).where(OrgUnit.deleted_at.is_(None))
-        if filters.parent_id is not None:
-            query = query.where(OrgUnit.parent_id == filters.parent_id)
-        if filters.type_ is not None:
-            query = query.where(OrgUnit.type == filters.type_)
-        if filters.is_active is not None:
-            query = query.where(OrgUnit.is_active == filters.is_active)
-        if filters.search:
-            pattern = f"%{filters.search}%"
-            query = query.where(
-                or_(OrgUnit.name.ilike(pattern), OrgUnit.code.ilike(pattern))
-            )
-        return (await self.db.execute(query)).scalar_one()

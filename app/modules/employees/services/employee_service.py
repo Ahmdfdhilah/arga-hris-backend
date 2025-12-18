@@ -7,12 +7,7 @@ from datetime import datetime
 import logging
 
 from app.modules.employees.models.employee import Employee
-from app.modules.employees.repositories import (
-    EmployeeQueries,
-    EmployeeCommands,
-    EmployeeFilters,
-    PaginationParams,
-)
+from app.modules.employees.repositories import EmployeeQueries, EmployeeCommands
 from app.modules.org_units.repositories import OrgUnitQueries
 from app.modules.employees.schemas import EmployeeResponse
 from app.modules.users.users.repositories import UserQueries, UserCommands
@@ -123,14 +118,24 @@ class EmployeeService:
         org_unit_id: Optional[int] = None,
         is_active: Optional[bool] = None,
     ) -> Tuple[List[EmployeeResponse], Dict[str, Any]]:
-        params = PaginationParams(page=page, limit=limit)
-        filters = EmployeeFilters(
-            org_unit_id=org_unit_id, is_active=is_active, search=search
+        skip = (page - 1) * limit
+
+        employees = await self.queries.list(
+            org_unit_id=org_unit_id,
+            is_active=is_active,
+            search=search,
+            skip=skip,
+            limit=limit,
         )
-        employees, pagination = await self.queries.list(params, filters)
-        return [
-            EmployeeResponse.model_validate(e) for e in employees
-        ], pagination.to_dict()
+        total = await self.queries.count(
+            org_unit_id=org_unit_id,
+            is_active=is_active,
+            search=search,
+        )
+
+        items = [EmployeeResponse.model_validate(e) for e in employees]
+        pagination = {"page": page, "limit": limit, "total_items": total}
+        return items, pagination
 
     async def list_by_org_unit(
         self,
@@ -142,13 +147,23 @@ class EmployeeService:
         org_unit = await self.org_unit_queries.get_by_id(org_unit_id)
         if not org_unit:
             raise NotFoundException(f"OrgUnit with ID {org_unit_id} not found")
-        params = PaginationParams(page=page, limit=limit)
-        employees, pagination = await self.queries.get_by_org_unit(
-            org_unit_id, include_children, params
+
+        skip = (page - 1) * limit
+
+        employees = await self.queries.get_by_org_unit(
+            org_unit_id=org_unit_id,
+            include_children=include_children,
+            skip=skip,
+            limit=limit,
         )
-        return [
-            EmployeeResponse.model_validate(e) for e in employees
-        ], pagination.to_dict()
+        total = await self.queries.count_by_org_unit(
+            org_unit_id=org_unit_id,
+            include_children=include_children,
+        )
+
+        items = [EmployeeResponse.model_validate(e) for e in employees]
+        pagination = {"page": page, "limit": limit, "total_items": total}
+        return items, pagination
 
     async def list_subordinates(
         self, employee_id: int, page: int = 1, limit: int = 10, recursive: bool = False
@@ -156,22 +171,39 @@ class EmployeeService:
         employee = await self.queries.get_by_id(employee_id)
         if not employee:
             raise NotFoundException(f"Employee with ID {employee_id} not found")
-        params = PaginationParams(page=page, limit=limit)
-        employees, pagination = await self.queries.get_subordinates(
-            employee_id, recursive, params
+
+        skip = (page - 1) * limit
+
+        employees = await self.queries.get_subordinates(
+            supervisor_id=employee_id,
+            recursive=recursive,
+            skip=skip,
+            limit=limit,
         )
-        return [
-            EmployeeResponse.model_validate(e) for e in employees
-        ], pagination.to_dict()
+        total = await self.queries.count_subordinates(
+            supervisor_id=employee_id,
+            recursive=recursive,
+        )
+
+        items = [EmployeeResponse.model_validate(e) for e in employees]
+        pagination = {"page": page, "limit": limit, "total_items": total}
+        return items, pagination
 
     async def list_deleted(
         self, page: int = 1, limit: int = 10, search: Optional[str] = None
     ) -> Tuple[List[EmployeeResponse], Dict[str, Any]]:
-        params = PaginationParams(page=page, limit=limit)
-        employees, pagination = await self.queries.list_deleted(params, search)
-        return [
-            EmployeeResponse.model_validate(e) for e in employees
-        ], pagination.to_dict()
+        skip = (page - 1) * limit
+
+        employees = await self.queries.list_deleted(
+            search=search,
+            skip=skip,
+            limit=limit,
+        )
+        total = await self.queries.count_deleted(search=search)
+
+        items = [EmployeeResponse.model_validate(e) for e in employees]
+        pagination = {"page": page, "limit": limit, "total_items": total}
+        return items, pagination
 
     async def create(
         self,

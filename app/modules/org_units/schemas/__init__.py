@@ -1,7 +1,5 @@
 from app.modules.org_units.schemas.responses import (
     OrgUnitResponse,
-    OrgUnitListResponse,
-    PaginationInfo,
     OrgUnitHierarchyItem,
     OrgUnitHierarchyResponse,
     OrgUnitTypesResponse,
@@ -18,8 +16,6 @@ from app.modules.org_units.schemas.requests import (
 __all__ = [
     # Responses
     "OrgUnitResponse",
-    "OrgUnitListResponse",
-    "PaginationInfo",
     "OrgUnitHierarchyItem",
     "OrgUnitHierarchyResponse",
     "OrgUnitTypesResponse",

@@ -6,12 +6,7 @@ from typing import Optional, List, Tuple, Dict, Any
 import logging
 
 from app.modules.org_units.models.org_unit import OrgUnit
-from app.modules.org_units.repositories import (
-    OrgUnitQueries,
-    OrgUnitCommands,
-    OrgUnitFilters,
-    PaginationParams,
-)
+from app.modules.org_units.repositories import OrgUnitQueries, OrgUnitCommands
 from app.modules.employees.repositories import EmployeeQueries
 from app.modules.org_units.schemas.responses import (
     OrgUnitResponse,
@@ -103,25 +98,42 @@ class OrgUnitService:
         type_filter: Optional[str] = None,
     ) -> Tuple[List[OrgUnitResponse], Dict[str, Any]]:
         """List organization units with filters and pagination"""
-        params = PaginationParams(page=page, limit=limit)
-        filters = OrgUnitFilters(parent_id=parent_id, type_=type_filter, search=search)
+        skip = (page - 1) * limit
 
-        org_units, pagination = await self.queries.list(params, filters)
+        org_units = await self.queries.list(
+            parent_id=parent_id,
+            type_filter=type_filter,
+            search=search,
+            skip=skip,
+            limit=limit,
+        )
+        total = await self.queries.count(
+            parent_id=parent_id,
+            type_filter=type_filter,
+            search=search,
+        )
 
         items = [OrgUnitResponse.from_orm_with_head(ou) for ou in org_units]
-        return items, pagination.to_dict()
+        pagination = {"page": page, "limit": limit, "total_items": total}
+        return items, pagination
 
     async def get_org_unit_children(
         self, org_unit_id: int, page: int = 1, limit: int = 10
     ) -> Tuple[List[OrgUnitResponse], Dict[str, Any]]:
         """Get children organization units"""
-        params = PaginationParams(page=page, limit=limit)
-        org_units, pagination = await self.queries.get_children(
-            org_unit_id, False, params
+        skip = (page - 1) * limit
+
+        org_units = await self.queries.get_children(
+            parent_id=org_unit_id,
+            recursive=False,
+            skip=skip,
+            limit=limit,
         )
+        total = await self.queries.count_children(org_unit_id, recursive=False)
 
         items = [OrgUnitResponse.from_orm_with_head(ou) for ou in org_units]
-        return items, pagination.to_dict()
+        pagination = {"page": page, "limit": limit, "total_items": total}
+        return items, pagination
 
     async def get_org_unit_hierarchy(
         self, org_unit_id: Optional[int] = None
@@ -382,8 +394,8 @@ class OrgUnitService:
                 await self.commands.update(org_unit)
 
                 # Update all descendants
-                children, _ = await self.queries.get_children(
-                    org_unit.id, recursive=True
+                children = await self.queries.get_children(
+                    org_unit.id, recursive=True, skip=0, limit=1000
                 )
                 for child in children:
                     child.path = child.path.replace(old_path, org_unit.path, 1)
@@ -470,11 +482,16 @@ class OrgUnitService:
         self, page: int = 1, limit: int = 10, search: Optional[str] = None
     ) -> Tuple[List[OrgUnitResponse], Dict[str, Any]]:
         """List soft-deleted organization units"""
-        params = PaginationParams(page=page, limit=limit)
-        org_units, pagination = await self.queries.list_deleted(params, search)
+        skip = (page - 1) * limit
+
+        org_units = await self.queries.list_deleted(
+            search=search, skip=skip, limit=limit
+        )
+        total = await self.queries.count_deleted(search=search)
 
         items = [OrgUnitResponse.from_orm_with_head(ou) for ou in org_units]
-        return items, pagination.to_dict()
+        pagination = {"page": page, "limit": limit, "total_items": total}
+        return items, pagination
 
     async def bulk_insert_org_units(
         self, items: List[OrgUnitBulkItem], created_by: str, skip_errors: bool = False

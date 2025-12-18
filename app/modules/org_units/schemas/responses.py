@@ -105,22 +105,6 @@ class OrgUnitResponse(BaseModel):
         return cls(**data)
 
 
-class PaginationInfo(BaseModel):
-    """Pagination information"""
-
-    page: int
-    limit: int
-    total_items: int
-    total_pages: int = 0
-
-
-class OrgUnitListResponse(BaseModel):
-    """Response for list of org units with pagination"""
-
-    org_units: List[OrgUnitResponse]
-    pagination: PaginationInfo
-
-
 class OrgUnitHierarchyItem(BaseModel):
     """Recursive hierarchy item"""
 
