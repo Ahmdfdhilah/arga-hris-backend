@@ -65,60 +65,6 @@ class EmployeeQueries:
         )
         return result.scalar_one_or_none()
 
-    async def list(
-        self,
-        org_unit_id: Optional[int] = None,
-        is_active: Optional[bool] = None,
-        search: Optional[str] = None,
-        skip: int = 0,
-        limit: int = 10,
-    ) -> List[Employee]:
-        query = select(Employee).where(Employee.deleted_at.is_(None))
-
-        if org_unit_id is not None:
-            query = query.where(Employee.org_unit_id == org_unit_id)
-
-        if is_active is not None:
-            query = query.where(Employee.is_active == is_active)
-
-        if search:
-            pattern = f"%{search}%"
-            query = query.outerjoin(User, Employee.user_id == User.id).where(
-                or_(
-                    User.name.ilike(pattern),
-                    User.email.ilike(pattern),
-                    Employee.number.ilike(pattern),
-                )
-            )
-
-        query = query.options(*self._base_options()).offset(skip).limit(limit)
-        result = await self.db.execute(query)
-        return list(result.scalars().unique().all())
-
-    async def count(
-        self,
-        org_unit_id: Optional[int] = None,
-        is_active: Optional[bool] = None,
-        search: Optional[str] = None,
-    ) -> int:
-        query = select(func.count(Employee.id)).where(Employee.deleted_at.is_(None))
-
-        if org_unit_id is not None:
-            query = query.where(Employee.org_unit_id == org_unit_id)
-        if is_active is not None:
-            query = query.where(Employee.is_active == is_active)
-        if search:
-            pattern = f"%{search}%"
-            query = query.outerjoin(User, Employee.user_id == User.id).where(
-                or_(
-                    User.name.ilike(pattern),
-                    User.email.ilike(pattern),
-                    Employee.number.ilike(pattern),
-                )
-            )
-
-        return (await self.db.execute(query)).scalar_one()
-
     async def list_deleted(
         self,
         search: Optional[str] = None,
@@ -241,7 +187,63 @@ class EmployeeQueries:
             )
             return (await self.db.execute(query)).scalar_one()
 
-    async def get_by_org_unit(
+    async def count(
+        self,
+        org_unit_id: Optional[int] = None,
+        is_active: Optional[bool] = None,
+        search: Optional[str] = None,
+    ) -> int:
+        query = select(func.count(Employee.id)).where(Employee.deleted_at.is_(None))
+
+        if org_unit_id is not None:
+            query = query.where(Employee.org_unit_id == org_unit_id)
+        if is_active is not None:
+            query = query.where(Employee.is_active == is_active)
+        if search:
+            pattern = f"%{search}%"
+            query = query.outerjoin(User, Employee.user_id == User.id).where(
+                or_(
+                    User.name.ilike(pattern),
+                    User.email.ilike(pattern),
+                    Employee.number.ilike(pattern),
+                )
+            )
+
+        return (await self.db.execute(query)).scalar_one()
+
+    async def list(
+        self,
+        org_unit_id: Optional[int] = None,
+        search: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        limit: int = 10,
+        skip: int = 0,
+    ) -> List[Employee]:
+        query = select(Employee).options(*self._base_options())
+
+        if org_unit_id:
+            query = query.where(Employee.org_unit_id == org_unit_id)
+
+        if is_active is not None:
+            query = query.where(Employee.is_active == is_active)
+
+        if search:
+            # Join with User to search by name/email
+            query = query.join(Employee.user).where(
+                or_(
+                    Employee.number.ilike(f"%{search}%"),
+                    User.name.ilike(f"%{search}%"),
+                    User.email.ilike(f"%{search}%"),
+                )
+            )
+
+        query = query.where(Employee.deleted_at.is_(None))
+        query = query.offset(skip).limit(limit)
+
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def get_all_by_org_unit(
         self,
         org_unit_id: int,
         include_children: bool = False,

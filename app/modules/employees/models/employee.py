@@ -21,45 +21,51 @@ if TYPE_CHECKING:
 
 class Employee(Base, TimestampMixin):
     """Employee model - employment data with user profile link"""
-    
+
     __tablename__ = "employees"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    
+
     # Link to user profile (one-to-one) - UUID string
     user_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
         unique=True,
         nullable=True,
-        index=True
+        index=True,
     )
-    
+
     # Employee identification
-    number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
-    
+    number: Mapped[str] = mapped_column(
+        String(50), unique=True, nullable=False, index=True
+    )
+
     # Employment data
     position: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # on_site, hybrid, ho
-    
+    type: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True
+    )  # on_site, hybrid, ho
+
     # Organization structure
     org_unit_id: Mapped[Optional[int]] = mapped_column(
-        Integer, 
-        ForeignKey("org_units.id", ondelete="SET NULL"), 
-        nullable=True, 
-        index=True
+        Integer,
+        ForeignKey("org_units.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     supervisor_id: Mapped[Optional[int]] = mapped_column(
-        Integer, 
-        ForeignKey("employees.id", ondelete="SET NULL"), 
-        nullable=True, 
-        index=True
+        Integer,
+        ForeignKey("employees.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
-    
+
     # Additional data
     metadata_: Mapped[Optional[dict]] = mapped_column("metadata", JSONB, nullable=True)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
-    
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, index=True
+    )
+
     # Audit fields for soft delete - UUID strings
     created_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
     updated_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
@@ -68,39 +74,32 @@ class Employee(Base, TimestampMixin):
 
     # Relationships
     user: Mapped[Optional["User"]] = relationship(
-        "User",
-        back_populates="employee",
-        foreign_keys=[user_id]
+        "User", back_populates="employee", foreign_keys=[user_id]
     )
     org_unit: Mapped[Optional["OrgUnit"]] = relationship(
-        "OrgUnit",
-        foreign_keys=[org_unit_id],
-        back_populates="employees"
+        "OrgUnit", foreign_keys=[org_unit_id], back_populates="employees"
     )
     supervisor: Mapped[Optional["Employee"]] = relationship(
         "Employee",
         remote_side=[id],
         back_populates="subordinates",
-        foreign_keys=[supervisor_id]
+        foreign_keys=[supervisor_id],
+        post_update=True,
     )
     subordinates: Mapped[List["Employee"]] = relationship(
-        "Employee",
-        back_populates="supervisor",
-        foreign_keys=[supervisor_id]
+        "Employee", back_populates="supervisor", foreign_keys=[supervisor_id]
     )
     headed_units: Mapped[List["OrgUnit"]] = relationship(
-        "OrgUnit",
-        foreign_keys="OrgUnit.head_id",
-        back_populates="head"
+        "OrgUnit", foreign_keys="OrgUnit.head_id", back_populates="head"
     )
 
     # Constraints
     __table_args__ = (
         CheckConstraint(
             "type IN ('on_site', 'hybrid', 'ho') OR type IS NULL",
-            name="ck_employees_type"
+            name="ck_employees_type",
         ),
-        Index('ix_employees_number_search', 'number', postgresql_using='btree'),
+        Index("ix_employees_number_search", "number", postgresql_using="btree"),
     )
 
     def is_deleted(self) -> bool:

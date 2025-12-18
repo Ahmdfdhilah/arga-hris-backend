@@ -7,7 +7,7 @@ import logging
 
 from app.modules.org_units.models.org_unit import OrgUnit
 from app.modules.org_units.repositories import OrgUnitQueries, OrgUnitCommands
-from app.modules.employees.repositories import EmployeeQueries
+from app.modules.employees.repositories import EmployeeQueries, EmployeeCommands
 from app.modules.org_units.schemas.responses import (
     OrgUnitResponse,
     OrgUnitTypesResponse,
@@ -34,11 +34,13 @@ class OrgUnitService:
         queries: OrgUnitQueries,
         commands: OrgUnitCommands,
         employee_queries: Optional[EmployeeQueries] = None,
+        employee_commands: Optional[EmployeeCommands] = None,
         event_publisher: Optional[EventPublisher] = None,
     ):
         self.queries = queries
         self.commands = commands
         self.employee_queries = employee_queries
+        self.employee_commands = employee_commands
         self.event_publisher = event_publisher
 
     def _org_unit_to_event_data(self, org_unit: OrgUnit) -> Dict[str, Any]:
@@ -166,35 +168,89 @@ class OrgUnitService:
 
         return result
 
-    async def _validate_head_assignment(
-        self, employee_id: int, org_unit_id: Optional[int] = None
+    async def _resolve_supervisor_for_unit(
+        self, org_unit_id: int, exclude_employee_id: Optional[int] = None
+    ) -> Optional[int]:
+        """
+        Internal helper to resolve effective supervisor for a unit.
+        Simulates the upstream lookup.
+        If exclude_employee_id is provided, it skips that employee if found as head.
+        """
+        current_unit = await self.queries.get_by_id(org_unit_id)
+        while current_unit:
+            logger.info(
+                f"Resolving sup for Unit {org_unit_id}. Checking Unit {current_unit.id}. Head: {current_unit.head_id}. Exclude: {exclude_employee_id}"
+            )
+            if current_unit.head_id:
+                if (
+                    exclude_employee_id is None
+                    or current_unit.head_id != exclude_employee_id
+                ):
+                    return current_unit.head_id
+                else:
+                    logger.info("Skipping head because matches exclude_employee_id")
+
+            if not current_unit.parent_id:
+                break
+            current_unit = await self.queries.get_by_id(current_unit.parent_id)
+        return None
+
+    async def _handle_head_change(
+        self,
+        org_unit_id: int,
+        old_head_id: Optional[int],
+        new_head_id: Optional[int],
+        updated_by: str,
     ) -> None:
-        """Validate that employee can be assigned as head"""
-        if not self.employee_queries:
-            return
+        """
+        Handle Org Unit Head change:
+        - If Head changed, update direct subordinates' supervisor_id.
+        - If Head cleared, resolve effective supervisor (from parent).
+        - Propagate to child Org Units that do not have their own Head (inherit).
+        """
+        # 1. Resolve who the supervisor should be for this unit (Generic)
+        effective_supervisor_id = new_head_id
+        if not effective_supervisor_id:
+            # If head was cleared, look upstream
+            effective_supervisor_id = await self._resolve_supervisor_for_unit(
+                org_unit_id
+            )
 
-        employee = await self.employee_queries.get_by_id(employee_id)
-        if not employee:
-            raise BadRequestException(f"Employee with ID {employee_id} not found")
-
-        if not employee.is_active:
-            raise BadRequestException("Employee is not active")
-
-        # Check if employee is already head of another unit
-        existing_head_units = await self.queries.get_units_where_employee_is_head(
-            employee_id
+        # 2. Update Direct Members of this Unit
+        members = await self.employee_queries.list(org_unit_id=org_unit_id, limit=1000)
+        logger.info(
+            f"Updating {len(members)} members for OrgUnit {org_unit_id}. Effective Sup: {effective_supervisor_id}"
         )
 
-        # Filter out current unit if updating
-        other_units = [
-            u for u in existing_head_units if org_unit_id is None or u.id != org_unit_id
-        ]
+        for emp in members:
+            target_sup = effective_supervisor_id
 
-        if other_units:
-            raise BadRequestException(
-                "Employee is already head of another unit. "
-                "An employee can only be head of one unit"
-            )
+            # If the resolved supervisor is the employee themselves, look up further
+            if target_sup == emp.id:
+                logger.info(
+                    f"Employee {emp.id} is the generic supervisor. Re-resolving excluding self."
+                )
+                # Re-resolve excluding self
+                target_sup = await self._resolve_supervisor_for_unit(
+                    org_unit_id, exclude_employee_id=emp.id
+                )
+                logger.info(f"Re-resolved supervisor for {emp.id}: {target_sup}")
+
+            if emp.supervisor_id != target_sup:
+                logger.info(
+                    f"Updating Employee {emp.id}: supervisor {emp.supervisor_id} -> {target_sup}"
+                )
+                emp.supervisor_id = target_sup
+                emp.set_updated_by(updated_by)
+                await self.employee_commands.update(emp)
+
+        # 3. Propagate to Child Units
+        children = await self.queries.get_children(org_unit_id, recursive=False)
+        for child in children:
+            # Only propagate if child unit does NOT have its own head
+            # If it has a head, that head blocks inheritance (it's a new supervisor node)
+            if not child.head_id:
+                await self._handle_head_change(child.id, None, None, updated_by)
 
     async def create_org_unit(
         self,
@@ -224,9 +280,11 @@ class OrgUnitService:
                 )
             level = parent.level + 1
 
-        # Validate head assignment
-        if head_id:
-            await self._validate_head_assignment(head_id, None)
+        # Check if head exists if provided
+        if head_id and self.employee_queries:
+            head = await self.employee_queries.get_by_id(head_id)
+            if not head:
+                raise BadRequestException(f"Head employee with ID {head_id} not found")
 
         # Create org unit
         org_unit = OrgUnit(
@@ -258,6 +316,10 @@ class OrgUnitService:
 
         # Publish event
         await self._publish_event("created", created)
+
+        # Trigger head change logic to set initial supervisors?
+        # Likely not needed for CREATE unless we want to "steal" employees into this unit immediately?
+        # Assuming new unit is empty, so no subordinates to update.
 
         return OrgUnitResponse.from_orm_with_head(created)
 
@@ -299,11 +361,15 @@ class OrgUnitService:
 
                 parent_changed = True
 
-        # Validate head assignment
+        # Check head existence
         if "head_id" in update_data:
             head_id = update_data["head_id"]
-            if head_id is not None:
-                await self._validate_head_assignment(head_id, org_unit_id)
+            if head_id is not None and self.employee_queries:
+                head = await self.employee_queries.get_by_id(head_id)
+                if not head:
+                    raise BadRequestException(
+                        f"Head employee with ID {head_id} not found"
+                    )
 
         # Update fields
         if "name" in update_data:
@@ -324,12 +390,13 @@ class OrgUnitService:
         await self.commands.update(org_unit)
 
         # Handle head change - update supervisor relationships
-        if "head_id" in update_data:
-            head_id = update_data["head_id"]
-            if head_id is not None and head_id != old_head_id and self.employee_queries:
-                await self._handle_head_change(
-                    org_unit_id, old_head_id, head_id, updated_by
-                )
+        # We also trigger this if parent_id changed? (Since effective supervisor might come from parent)
+        # Yes! Changing parent connects us to a new hierarchy.
+        if "head_id" in update_data or parent_changed:
+            new_head_id = org_unit.head_id  # Could be None
+            await self._handle_head_change(
+                org_unit_id, old_head_id, new_head_id, updated_by
+            )
 
         # Recalculate path if parent changed
         if parent_changed:
@@ -342,50 +409,6 @@ class OrgUnitService:
         await self._publish_event("updated", updated)
 
         return OrgUnitResponse.from_orm_with_head(updated)
-
-    async def _handle_head_change(
-        self,
-        org_unit_id: int,
-        old_head_id: Optional[int],
-        new_head_id: int,
-        updated_by: str,
-    ) -> None:
-        """Handle supervisor reassignments when org unit head changes"""
-        if not self.employee_queries or not old_head_id:
-            return
-
-        org_unit = await self.queries.get_by_id(org_unit_id)
-        if not org_unit:
-            return
-
-        # Get parent head for new head's supervisor
-        parent_head_id = None
-        if org_unit.parent_id:
-            parent = await self.queries.get_by_id(org_unit.parent_id)
-            if parent:
-                parent_head_id = parent.head_id
-
-        # Update subordinates of old head → new head
-        subordinates = await self.employee_queries.get_all_by_supervisor(old_head_id)
-        subordinate_ids = [s.id for s in subordinates if s.id != new_head_id]
-        if subordinate_ids:
-            await self.employee_queries.bulk_update_supervisor(
-                subordinate_ids, new_head_id, updated_by
-            )
-
-        # Set new head's supervisor to parent head
-        new_head = await self.employee_queries.get_by_id(new_head_id)
-        if new_head:
-            new_head.supervisor_id = parent_head_id
-            new_head.set_updated_by(updated_by)
-            await self.employee_queries.update(new_head)
-
-        # Set old head's supervisor to new head
-        old_head = await self.employee_queries.get_by_id(old_head_id)
-        if old_head and old_head.org_unit_id == org_unit_id:
-            old_head.supervisor_id = new_head_id
-            old_head.set_updated_by(updated_by)
-            await self.employee_queries.update(old_head)
 
     async def _recalculate_path(self, org_unit: OrgUnit) -> None:
         """Recalculate path for org unit and all descendants"""
