@@ -6,7 +6,7 @@ from app.modules.attendance.schemas import AttendanceListResponse
 from app.config.constants import AttendanceConstants
 from app.core.exceptions.client_error import BadRequestException
 from app.core.utils.file_upload import generate_signed_url_for_path
-from app.modules.attendance.utils.date_utils import get_date_range_from_type
+from app.core.utils.datetime import get_date_range_from_type
 
 
 class GetAllAttendancesUseCase:

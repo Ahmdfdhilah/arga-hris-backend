@@ -1,6 +1,5 @@
-from typing import Tuple, List, Optional
-from datetime import datetime, date, timedelta
-from app.modules.attendance.utils.validators import is_working_day
+from typing import Tuple
+from datetime import datetime
 
 
 def calculate_work_hours_and_overtime(
@@ -24,20 +23,3 @@ def calculate_work_hours_and_overtime(
         overtime_hours = overtime_time_diff.total_seconds() / 3600
 
     return round(work_hours, 2), round(overtime_hours, 2)
-
-
-def generate_working_days_for_employee(
-    start_date: date, end_date: date, employee_type: Optional[str]
-) -> List[date]:
-    """
-    Generate list of working days in a date range based on employee type.
-    """
-    working_days = []
-    current_date = start_date
-
-    while current_date <= end_date:
-        if is_working_day(current_date, employee_type):
-            working_days.append(current_date)
-        current_date += timedelta(days=1)
-
-    return working_days

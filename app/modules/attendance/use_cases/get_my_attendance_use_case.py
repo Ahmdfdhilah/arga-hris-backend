@@ -4,7 +4,7 @@ from app.modules.attendance.repositories import AttendanceQueries
 from app.modules.employees.repositories import EmployeeQueries
 from app.modules.attendance.schemas import AttendanceListResponse
 from app.core.utils.file_upload import generate_signed_url_for_path
-from app.modules.attendance.utils.date_utils import get_date_range_from_type
+from app.core.utils.datetime import get_date_range_from_type
 
 
 class GetMyAttendanceUseCase:

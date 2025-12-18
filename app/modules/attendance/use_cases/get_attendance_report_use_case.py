@@ -13,7 +13,9 @@ from app.modules.attendance.schemas import (
 )
 from app.modules.attendance.schemas.shared import AttendanceStatus
 from app.core.exceptions.client_error import BadRequestException
-from app.modules.attendance.utils.calculators import generate_working_days_for_employee
+from app.core.utils.workforce import (
+    generate_working_days_list as generate_working_days_for_employee,
+)
 
 
 class GetAttendanceReportUseCase:
