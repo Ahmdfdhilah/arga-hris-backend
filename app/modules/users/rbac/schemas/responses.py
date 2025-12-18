@@ -28,7 +28,7 @@ class PermissionResponse(BaseModel):
 
 
 class UserRolesPermissionsResponse(BaseModel):
-    user_id: int
+    user_id: str
     email: str
     full_name: str
     roles: List[str]
@@ -37,11 +37,13 @@ class UserRolesPermissionsResponse(BaseModel):
 
 class RoleAssignmentResponse(BaseModel):
     """Response untuk hasil assign/remove role"""
-    user_id: int
+
+    user_id: str
     role_name: str
 
 
 class MultipleRoleAssignmentResponse(BaseModel):
     """Response untuk hasil assign multiple roles"""
-    user_id: int
+
+    user_id: str
     roles: List[str]

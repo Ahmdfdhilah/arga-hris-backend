@@ -36,9 +36,6 @@ class Settings(BaseSettings):
     JWT_PUBLIC_KEY_PATH: str = Field(default="./jwt_public.pem")
     JWT_ALGORITHM: str = Field(default="RS256")
 
-    WORKFORCE_GRPC_HOST: str = Field(...)
-    WORKFORCE_GRPC_PORT: int = Field(...)
-
     # SSO Service for user sync
     SSO_SERVICE_URL: str = Field(default="http://localhost:8001")
     SSO_SERVICE_API_KEY: str = Field(default="your-secret-api-key-here")

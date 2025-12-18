@@ -4,8 +4,7 @@ from datetime import datetime
 
 
 class UserResponse(BaseModel):
-    id: int
-    sso_id: Optional[int] = None
+    id: str  # SSO UUID
     email: EmailStr
     first_name: str
     last_name: str
@@ -21,8 +20,7 @@ class UserResponse(BaseModel):
 
 
 class UserWithEmployeeResponse(BaseModel):
-    id: int
-    sso_id: int
+    id: str  # SSO UUID
     email: EmailStr
     first_name: str
     last_name: str
@@ -36,8 +34,7 @@ class UserWithEmployeeResponse(BaseModel):
 
 
 class UserDetailResponse(BaseModel):
-    id: int
-    sso_id: Optional[int] = None
+    id: str  # SSO UUID
     email: EmailStr
     first_name: str
     last_name: str

@@ -9,8 +9,8 @@ from datetime import datetime
 
 class UserNestedResponse(BaseModel):
     """User profile data (synced from SSO)"""
-    id: int
-    sso_id: str
+
+    id: str  # SSO UUID
     name: str
     email: Optional[str] = None
     phone: Optional[str] = None
@@ -24,6 +24,7 @@ class UserNestedResponse(BaseModel):
 
 class EmployeeOrgUnitNestedResponse(BaseModel):
     """Nested org unit"""
+
     id: int
     code: str
     name: str
@@ -35,6 +36,7 @@ class EmployeeOrgUnitNestedResponse(BaseModel):
 
 class EmployeeSupervisorNestedResponse(BaseModel):
     """Nested supervisor"""
+
     id: int
     number: str
     position: Optional[str] = None
@@ -46,8 +48,9 @@ class EmployeeSupervisorNestedResponse(BaseModel):
 
 class EmployeeResponse(BaseModel):
     """Employee with nested user profile"""
+
     id: int
-    user_id: Optional[int] = None
+    user_id: Optional[str] = None
     number: str
     position: Optional[str] = None
     type: Optional[str] = None
@@ -56,7 +59,7 @@ class EmployeeResponse(BaseModel):
     is_active: bool = True
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
-    
+
     user: Optional[UserNestedResponse] = None
     org_unit: Optional[EmployeeOrgUnitNestedResponse] = None
     supervisor: Optional[EmployeeSupervisorNestedResponse] = None
@@ -70,6 +73,7 @@ EmployeeSupervisorNestedResponse.model_rebuild()
 
 class BulkInsertResult(BaseModel):
     """Bulk insert result"""
+
     total_items: int
     success_count: int
     error_count: int

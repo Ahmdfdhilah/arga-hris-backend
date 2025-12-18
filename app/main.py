@@ -41,42 +41,46 @@ async def lifespan(app: FastAPI):
     """
     # Import event handlers to register them
     import app.modules.users.users.events  # noqa: F401 - registers handlers
-    
+
     from app.core.messaging.consumer import EventConsumer, EventHandlerRegistry
-    from app.grpc import grpc_server
-    
+    from app.grpc.server import grpc_server
+
     consumer = None
-    
+
     # Startup: Scheduler
     await setup_scheduler()
-    
+
     # Startup: gRPC Server (for Employee/OrgUnit master data)
     try:
         await grpc_server.start()
         logger.info("HRIS gRPC server started successfully")
     except Exception as e:
-        logger.warning(f"gRPC server initialization failed: {e}. gRPC will not be available.")
-    
+        logger.warning(
+            f"gRPC server initialization failed: {e}. gRPC will not be available."
+        )
+
     # Startup: RabbitMQ
     try:
         await rabbitmq_manager.connect()
         await rabbitmq_manager.setup_exchanges_and_queues()
         logger.info("RabbitMQ initialized successfully")
-        
+
         # Log registered handlers
         all_handlers = EventHandlerRegistry.list_all()
         if all_handlers:
             logger.info("Registered event handlers:")
             for event_type, handlers in all_handlers.items():
                 logger.info(f"  {event_type} → {', '.join(handlers)}")
-        
+
         # Start event consumer in background
         consumer = EventConsumer(rabbitmq_manager, service_name="hris")
         consumer.start_background("hris.events", prefetch_count=10)
         logger.info("Event consumer started in background")
-        
+
     except Exception as e:
-        logger.warning(f"RabbitMQ initialization failed: {e}. Events will not be consumed.")
+        logger.warning(
+            f"RabbitMQ initialization failed: {e}. Events will not be consumed."
+        )
 
     yield
 
@@ -98,7 +102,7 @@ async def lifespan(app: FastAPI):
         await rabbitmq_manager.disconnect()
     except Exception as e:
         logger.warning(f"RabbitMQ disconnect error: {e}")
-    
+
     # Shutdown: Stop scheduler
     await shutdown_scheduler()
 

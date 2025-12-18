@@ -26,9 +26,9 @@ class Employee(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     
-    # Link to user profile (one-to-one)
-    user_id: Mapped[Optional[int]] = mapped_column(
-        Integer,
+    # Link to user profile (one-to-one) - UUID string
+    user_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
         unique=True,
         nullable=True,
@@ -60,11 +60,11 @@ class Employee(Base, TimestampMixin):
     metadata_: Mapped[Optional[dict]] = mapped_column("metadata", JSONB, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
     
-    # Audit fields for soft delete
-    created_by: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    updated_by: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Audit fields for soft delete - UUID strings
+    created_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    updated_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(nullable=True, index=True)
-    deleted_by: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    deleted_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
 
     # Relationships
     user: Mapped[Optional["User"]] = relationship(
@@ -107,15 +107,15 @@ class Employee(Base, TimestampMixin):
         """Check if employee is soft deleted"""
         return self.deleted_at is not None
 
-    def set_created_by(self, user_id: int) -> None:
+    def set_created_by(self, user_id: str) -> None:
         """Set created_by field"""
         self.created_by = user_id
 
-    def set_updated_by(self, user_id: int) -> None:
+    def set_updated_by(self, user_id: str) -> None:
         """Set updated_by field"""
         self.updated_by = user_id
 
-    def set_deleted_by(self, user_id: int) -> None:
+    def set_deleted_by(self, user_id: str) -> None:
         """Set deleted_by field"""
         self.deleted_by = user_id
 

@@ -1,6 +1,6 @@
 from typing import List
 from app.modules.users.rbac.repositories.role_repository import RoleRepository
-from app.modules.users.users.repositories.user_repository import UserRepository
+from app.modules.users.users.repositories import UserQueries
 from app.modules.users.rbac.schemas.responses import (
     RoleResponse,
     PermissionResponse,
@@ -19,27 +19,27 @@ class RoleService:
     def __init__(
         self,
         role_repo: RoleRepository,
-        user_repo: UserRepository,
+        user_queries: UserQueries,
     ):
         self.role_repo = role_repo
-        self.user_repo = user_repo
+        self.user_queries = user_queries
 
-    async def get_user_roles(self, user_id: int) -> List[str]:
+    async def get_user_roles(self, user_id: str) -> List[str]:
         """Get list of role names for a user"""
         return await self.role_repo.get_user_roles(user_id)
 
-    async def get_user_permissions(self, user_id: int) -> List[str]:
+    async def get_user_permissions(self, user_id: str) -> List[str]:
         """Get list of permission codes for a user"""
         return await self.role_repo.get_user_permissions(user_id)
 
     async def assign_role_by_name(
-        self, user_id: int, role_name: str
+        self, user_id: str, role_name: str
     ) -> DataResponse[RoleAssignmentResponse]:
         """
         Assign role ke user berdasarkan nama role
 
         Args:
-            user_id: ID user
+            user_id: ID user (UUID string)
             role_name: Nama role yang akan di-assign
 
         Returns:
@@ -49,7 +49,7 @@ class RoleService:
             NotFoundException: Jika user atau role tidak ditemukan
         """
         # Validate user exists
-        user = await self.user_repo.get(user_id)
+        user = await self.user_queries.get_by_id(user_id)
         if not user:
             raise NotFoundException(f"User dengan ID {user_id} tidak ditemukan")
 
@@ -59,24 +59,20 @@ class RoleService:
 
         await self.role_repo.assign_role(user_id, role.id)
 
-        response_data = RoleAssignmentResponse(
-            user_id=user_id,
-            role_name=role_name
-        )
+        response_data = RoleAssignmentResponse(user_id=user_id, role_name=role_name)
 
         return create_success_response(
-            message=f"Role '{role_name}' berhasil di-assign ke user",
-            data=response_data
+            message=f"Role '{role_name}' berhasil di-assign ke user", data=response_data
         )
 
     async def remove_role_by_name(
-        self, user_id: int, role_name: str
+        self, user_id: str, role_name: str
     ) -> DataResponse[RoleAssignmentResponse]:
         """
         Remove role dari user berdasarkan nama role
 
         Args:
-            user_id: ID user
+            user_id: ID user (UUID string)
             role_name: Nama role yang akan di-remove
 
         Returns:
@@ -86,7 +82,7 @@ class RoleService:
             NotFoundException: Jika user atau role tidak ditemukan
         """
         # Validate user exists
-        user = await self.user_repo.get(user_id)
+        user = await self.user_queries.get_by_id(user_id)
         if not user:
             raise NotFoundException(f"User dengan ID {user_id} tidak ditemukan")
 
@@ -96,24 +92,21 @@ class RoleService:
 
         await self.role_repo.remove_role(user_id, role.id)
 
-        response_data = RoleAssignmentResponse(
-            user_id=user_id,
-            role_name=role_name
-        )
+        response_data = RoleAssignmentResponse(user_id=user_id, role_name=role_name)
 
         return create_success_response(
             message=f"Role '{role_name}' berhasil di-remove dari user",
-            data=response_data
+            data=response_data,
         )
 
     async def assign_multiple_roles(
-        self, user_id: int, role_names: List[str]
+        self, user_id: str, role_names: List[str]
     ) -> DataResponse[MultipleRoleAssignmentResponse]:
         """
         Assign multiple roles ke user sekaligus
 
         Args:
-            user_id: ID user
+            user_id: ID user (UUID string)
             role_names: List nama role yang akan di-assign
 
         Returns:
@@ -123,7 +116,7 @@ class RoleService:
             NotFoundException: Jika user atau salah satu role tidak ditemukan
         """
         # Validate user exists
-        user = await self.user_repo.get(user_id)
+        user = await self.user_queries.get_by_id(user_id)
         if not user:
             raise NotFoundException(f"User dengan ID {user_id} tidak ditemukan")
 
@@ -134,23 +127,21 @@ class RoleService:
             await self.role_repo.assign_role(user_id, role.id)
 
         response_data = MultipleRoleAssignmentResponse(
-            user_id=user_id,
-            roles=role_names
+            user_id=user_id, roles=role_names
         )
 
         return create_success_response(
-            message="Multiple roles berhasil di-assign ke user",
-            data=response_data
+            message="Multiple roles berhasil di-assign ke user", data=response_data
         )
 
     async def get_user_roles_and_permissions(
-        self, user_id: int
+        self, user_id: str
     ) -> DataResponse[UserRolesPermissionsResponse]:
         """
         Get roles dan permissions user
 
         Args:
-            user_id: ID user
+            user_id: ID user (UUID string)
 
         Returns:
             DataResponse dengan UserRolesPermissionsResponse
@@ -158,7 +149,7 @@ class RoleService:
         Raises:
             NotFoundException: Jika user tidak ditemukan
         """
-        user = await self.user_repo.get(user_id)
+        user = await self.user_queries.get_by_id(user_id)
         if not user:
             raise NotFoundException(f"User dengan ID {user_id} tidak ditemukan")
 
@@ -168,14 +159,13 @@ class RoleService:
         response_data = UserRolesPermissionsResponse(
             user_id=user.id,
             email=user.email,
-            full_name=user.full_name,
+            full_name=user.name,  # User model has 'name' not 'full_name'
             roles=roles,
             permissions=permissions,
         )
 
         return create_success_response(
-            message="User roles dan permissions berhasil diambil",
-            data=response_data
+            message="User roles dan permissions berhasil diambil", data=response_data
         )
 
     async def get_all_roles(self) -> DataResponse[List[RoleResponse]]:
@@ -191,8 +181,7 @@ class RoleService:
             RoleResponse.model_validate(role) for role in roles
         ]
         return create_success_response(
-            message="Roles berhasil diambil",
-            data=roles_data
+            message="Roles berhasil diambil", data=roles_data
         )
 
     async def get_all_permissions(self) -> DataResponse[List[PermissionResponse]]:
@@ -208,6 +197,5 @@ class RoleService:
             PermissionResponse.model_validate(perm) for perm in permissions
         ]
         return create_success_response(
-            message="Permissions berhasil diambil",
-            data=permissions_data
+            message="Permissions berhasil diambil", data=permissions_data
         )

@@ -1,20 +1,14 @@
 # gRPC module for HRIS Backend
 # Includes both server (for Employee/OrgUnit master data) and clients (for SSO)
+#
+# NOTE: Server components (grpc_server, handlers) are NOT imported here to avoid
+# circular imports. Import them directly from app.grpc.server when needed.
 
-# Server components
-from app.grpc.server import grpc_server, GRPCServer
-from app.grpc.handlers import EmployeeHandler, OrgUnitHandler
-
-# Client components
+# Client components only - safe to import from services
 from app.grpc.base_client import BaseGRPCClient
 from app.grpc.clients.sso_client import SSOUserGRPCClient, SSOAuthGRPCClient
 
 __all__ = [
-    # Server
-    "grpc_server",
-    "GRPCServer",
-    "EmployeeHandler",
-    "OrgUnitHandler",
     # Client
     "BaseGRPCClient",
     "SSOUserGRPCClient",

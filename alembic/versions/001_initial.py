@@ -39,10 +39,10 @@ def upgrade() -> None:
         sa.Column('is_active', sa.Boolean(), nullable=False, server_default='true'),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.Column('created_by', sa.Integer(), nullable=True),
-        sa.Column('updated_by', sa.Integer(), nullable=True),
+        sa.Column('created_by', sa.String(36), nullable=True),
+        sa.Column('updated_by', sa.String(36), nullable=True),
         sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('deleted_by', sa.Integer(), nullable=True),
+        sa.Column('deleted_by', sa.String(36), nullable=True),
         sa.PrimaryKeyConstraint('id'),
         sa.ForeignKeyConstraint(['parent_id'], ['org_units.id'], ondelete='SET NULL')
     )
@@ -58,8 +58,7 @@ def upgrade() -> None:
     # =========================================
     op.create_table(
         'users',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('sso_id', sa.String(36), nullable=False),
+        sa.Column('id', sa.String(36), nullable=False),  # SSO UUID as PK
         # Profile fields (synced from SSO)
         sa.Column('name', sa.String(255), nullable=False),
         sa.Column('email', sa.String(255), nullable=True),
@@ -73,7 +72,6 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id'),
         sa.CheckConstraint("gender IN ('male', 'female') OR gender IS NULL", name='ck_users_gender')
     )
-    op.create_index('ix_users_sso_id', 'users', ['sso_id'], unique=True)
     op.create_index('ix_users_email', 'users', ['email'], unique=True)
     op.create_index('ix_users_name', 'users', ['name'])
     op.create_index('ix_users_is_active', 'users', ['is_active'])
@@ -84,7 +82,7 @@ def upgrade() -> None:
     op.create_table(
         'employees',
         sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('user_id', sa.Integer(), nullable=True),  # FK to users
+        sa.Column('user_id', sa.String(36), nullable=True),  # FK to users.id (UUID)
         sa.Column('number', sa.String(50), nullable=False),
         sa.Column('position', sa.String(255), nullable=True),
         sa.Column('type', sa.String(20), nullable=True),  # on_site, hybrid, ho
@@ -94,10 +92,10 @@ def upgrade() -> None:
         sa.Column('is_active', sa.Boolean(), nullable=False, server_default='true'),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.Column('created_by', sa.Integer(), nullable=True),
-        sa.Column('updated_by', sa.Integer(), nullable=True),
+        sa.Column('created_by', sa.String(36), nullable=True),
+        sa.Column('updated_by', sa.String(36), nullable=True),
         sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('deleted_by', sa.Integer(), nullable=True),
+        sa.Column('deleted_by', sa.String(36), nullable=True),
         sa.PrimaryKeyConstraint('id'),
         sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='SET NULL'),
         sa.ForeignKeyConstraint(['org_unit_id'], ['org_units.id'], ondelete='SET NULL'),
@@ -158,7 +156,7 @@ def upgrade() -> None:
     # =========================================
     op.create_table(
         'user_roles',
-        sa.Column('user_id', sa.Integer(), nullable=False),
+        sa.Column('user_id', sa.String(36), nullable=False),
         sa.Column('role_id', sa.Integer(), nullable=False),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
@@ -185,7 +183,6 @@ def upgrade() -> None:
     op.create_table(
         'attendance',
         sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('user_id', sa.Integer(), nullable=False),
         sa.Column('employee_id', sa.Integer(), nullable=False),
         sa.Column('check_in', sa.DateTime(timezone=True), nullable=False),
         sa.Column('check_out', sa.DateTime(timezone=True), nullable=True),
@@ -198,13 +195,12 @@ def upgrade() -> None:
         sa.Column('status', sa.String(20), nullable=False, server_default='present'),
         sa.Column('notes', sa.Text(), nullable=True),
         sa.Column('overtime_hours', sa.Float(), nullable=True),
+        sa.Column('created_by', sa.String(36), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.ForeignKeyConstraint(['user_id'], ['users.id']),
         sa.ForeignKeyConstraint(['employee_id'], ['employees.id']),
         sa.PrimaryKeyConstraint('id')
     )
-    op.create_index('ix_attendance_user_id', 'attendance', ['user_id'])
     op.create_index('ix_attendance_employee_id', 'attendance', ['employee_id'])
     op.create_index('ix_attendance_check_in', 'attendance', ['check_in'])
 
@@ -214,24 +210,20 @@ def upgrade() -> None:
     op.create_table(
         'leave_requests',
         sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('user_id', sa.Integer(), nullable=False),
         sa.Column('employee_id', sa.Integer(), nullable=False),
         sa.Column('leave_type', sa.String(50), nullable=False),
         sa.Column('start_date', sa.Date(), nullable=False),
         sa.Column('end_date', sa.Date(), nullable=False),
         sa.Column('reason', sa.Text(), nullable=True),
         sa.Column('status', sa.String(20), nullable=False, server_default='pending'),
-        sa.Column('approved_by', sa.Integer(), nullable=True),
         sa.Column('approved_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('rejection_reason', sa.Text(), nullable=True),
+        sa.Column('created_by', sa.String(36), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.ForeignKeyConstraint(['user_id'], ['users.id']),
         sa.ForeignKeyConstraint(['employee_id'], ['employees.id']),
-        sa.ForeignKeyConstraint(['approved_by'], ['users.id']),
         sa.PrimaryKeyConstraint('id')
     )
-    op.create_index('ix_leave_requests_user_id', 'leave_requests', ['user_id'])
     op.create_index('ix_leave_requests_employee_id', 'leave_requests', ['employee_id'])
     op.create_index('ix_leave_requests_status', 'leave_requests', ['status'])
 
@@ -241,24 +233,20 @@ def upgrade() -> None:
     op.create_table(
         'work_submissions',
         sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('user_id', sa.Integer(), nullable=False),
         sa.Column('employee_id', sa.Integer(), nullable=False),
         sa.Column('title', sa.String(255), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),
         sa.Column('submission_date', sa.Date(), nullable=False),
         sa.Column('attachments', sa.JSON(), nullable=True),
         sa.Column('status', sa.String(20), nullable=False, server_default='submitted'),
-        sa.Column('reviewed_by', sa.Integer(), nullable=True),
         sa.Column('reviewed_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('review_notes', sa.Text(), nullable=True),
+        sa.Column('created_by', sa.String(36), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.ForeignKeyConstraint(['user_id'], ['users.id']),
         sa.ForeignKeyConstraint(['employee_id'], ['employees.id']),
-        sa.ForeignKeyConstraint(['reviewed_by'], ['users.id']),
         sa.PrimaryKeyConstraint('id')
     )
-    op.create_index('ix_work_submissions_user_id', 'work_submissions', ['user_id'])
     op.create_index('ix_work_submissions_employee_id', 'work_submissions', ['employee_id'])
 
     # =========================================

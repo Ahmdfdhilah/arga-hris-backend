@@ -22,14 +22,14 @@ class UserCommands:
         await self.db.refresh(user)
         return user
 
-    async def update(self, user_id: int, data: Dict[str, Any]) -> Optional[User]:
+    async def update(self, user_id: str, data: Dict[str, Any]) -> Optional[User]:
         from app.modules.users.users.repositories.queries import UserQueries
-        
+
         queries = UserQueries(self.db)
         user = await queries.get_by_id(user_id)
         if not user:
             return None
-        
+
         for key, value in data.items():
             setattr(user, key, value)
         await self.db.commit()
@@ -45,8 +45,9 @@ class UserCommands:
         gender: Optional[str] = None,
         avatar_path: Optional[str] = None,
     ) -> User:
+        """Create user from SSO data. sso_id becomes user.id."""
         data = {
-            "sso_id": sso_id,
+            "id": sso_id,  # SSO UUID is the primary key
             "name": name,
             "email": email,
             "phone": phone,
@@ -66,10 +67,11 @@ class UserCommands:
         gender: Optional[str] = None,
         avatar_path: Optional[str] = None,
     ) -> User:
+        """Sync user from SSO (upsert). sso_id is the user.id."""
         from app.modules.users.users.repositories.queries import UserQueries
-        
+
         queries = UserQueries(self.db)
-        existing = await queries.get_by_sso_id(sso_id)
+        existing = await queries.get_by_id(sso_id)  # Lookup by ID (which is SSO UUID)
 
         update_data = {"synced_at": datetime.utcnow()}
         if name is not None:
@@ -86,14 +88,14 @@ class UserCommands:
         if existing:
             return await self.update(existing.id, update_data)
         else:
-            update_data["sso_id"] = sso_id
+            update_data["id"] = sso_id  # Set id directly
             update_data["is_active"] = True
             if name is None:
                 update_data["name"] = ""
             return await self.create(update_data)
 
-    async def deactivate(self, user_id: int) -> Optional[User]:
+    async def deactivate(self, user_id: str) -> Optional[User]:
         return await self.update(user_id, {"is_active": False})
 
-    async def activate(self, user_id: int) -> Optional[User]:
+    async def activate(self, user_id: str) -> Optional[User]:
         return await self.update(user_id, {"is_active": True})

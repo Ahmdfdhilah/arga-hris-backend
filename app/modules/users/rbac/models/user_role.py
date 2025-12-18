@@ -1,4 +1,4 @@
-from sqlalchemy import Integer, ForeignKey, DateTime
+from sqlalchemy import String, Integer, ForeignKey, DateTime
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from typing import TYPE_CHECKING
 from datetime import datetime as DateTimeType
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 class UserRole(Base):
     __tablename__ = "user_roles"
 
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, nullable=False)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, nullable=False)
     role_id: Mapped[int] = mapped_column(Integer, ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True, nullable=False)
     created_at: Mapped[DateTimeType] = mapped_column(DateTime(timezone=True), default=get_utc_now, nullable=False)
 

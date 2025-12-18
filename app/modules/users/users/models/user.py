@@ -2,7 +2,7 @@
 User Model - Profile replica from SSO
 
 Stores user profile data synced from SSO Master:
-- sso_id: Link to SSO user (UUID string)
+- id: SSO user UUID (primary key)
 - Profile fields: name, email, phone, gender, avatar_path (from SSO)
 - synced_at: Last sync timestamp
 - is_active: Local active status
@@ -10,7 +10,7 @@ Stores user profile data synced from SSO Master:
 Employee relationship links employment data to user profile.
 """
 
-from sqlalchemy import String, Integer, Boolean, DateTime, func
+from sqlalchemy import String, Boolean, DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import Optional, TYPE_CHECKING
 from datetime import datetime
@@ -26,8 +26,8 @@ class User(Base, TimestampMixin):
     
     __tablename__ = "users"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    sso_id: Mapped[str] = mapped_column(String(36), unique=True, nullable=False, index=True)
+    # SSO UUID as primary key
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, nullable=False)
     
     # Profile data (synced from SSO)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -54,4 +54,4 @@ class User(Base, TimestampMixin):
     )
 
     def __repr__(self) -> str:
-        return f"<User(id={self.id}, sso_id={self.sso_id}, name={self.name})>"
+        return f"<User(id={self.id}, name={self.name})>"

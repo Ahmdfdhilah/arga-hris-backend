@@ -16,12 +16,9 @@ class UserQueries:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_by_id(self, user_id: int) -> Optional[User]:
+    async def get_by_id(self, user_id: str) -> Optional[User]:
+        """Get user by ID (UUID from SSO)"""
         result = await self.db.execute(select(User).where(User.id == user_id))
-        return result.scalar_one_or_none()
-
-    async def get_by_sso_id(self, sso_id: str) -> Optional[User]:
-        result = await self.db.execute(select(User).where(User.sso_id == sso_id))
         return result.scalar_one_or_none()
 
     async def get_by_email(self, email: str) -> Optional[User]:
@@ -37,7 +34,7 @@ class UserQueries:
     ) -> Dict[str, Any]:
         offset = (page - 1) * limit
         stmt = select(User)
-        count_stmt = select(func.count(User.id))
+        count_stmt = select(func.count()).select_from(User)
 
         filters = []
         if is_active is not None:
@@ -67,16 +64,19 @@ class UserQueries:
             },
         }
 
-    async def get_by_sso_ids(self, sso_ids: List[str]) -> List[User]:
-        if not sso_ids:
+    async def get_by_ids(self, user_ids: List[str]) -> List[User]:
+        """Get multiple users by IDs"""
+        if not user_ids:
             return []
-        result = await self.db.execute(select(User).where(User.sso_id.in_(sso_ids)))
+        result = await self.db.execute(select(User).where(User.id.in_(user_ids)))
         return list(result.scalars().all())
 
     async def get_users_needing_sync(self, older_than_hours: int = 24) -> List[User]:
         threshold = datetime.utcnow() - timedelta(hours=older_than_hours)
-        stmt = select(User).where(
-            or_(User.synced_at.is_(None), User.synced_at < threshold)
-        ).where(User.is_active == True)
+        stmt = (
+            select(User)
+            .where(or_(User.synced_at.is_(None), User.synced_at < threshold))
+            .where(User.is_active == True)
+        )
         result = await self.db.execute(stmt)
         return list(result.scalars().all())

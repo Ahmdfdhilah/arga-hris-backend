@@ -1,4 +1,12 @@
-from sqlalchemy import String, Integer, Date, Text, CheckConstraint, UniqueConstraint, DateTime, true
+from sqlalchemy import (
+    String,
+    Integer,
+    Date,
+    Text,
+    CheckConstraint,
+    UniqueConstraint,
+    DateTime
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from typing import Optional, Any
@@ -28,15 +36,20 @@ class WorkSubmission(Base, TimestampMixin):
 
     files: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
 
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default='draft', index=True)
-    submitted_at: Mapped[Optional[DateTimeType]] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_by: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="draft", index=True
+    )
+    submitted_at: Mapped[Optional[DateTimeType]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
 
     __table_args__ = (
-        UniqueConstraint('employee_id', 'submission_month', name='uq_employee_submission_month'),
+        UniqueConstraint(
+            "employee_id", "submission_month", name="uq_employee_submission_month"
+        ),
         CheckConstraint(
-            "status IN ('draft', 'submitted')",
-            name="check_submission_status_valid"
+            "status IN ('draft', 'submitted')", name="check_submission_status_valid"
         ),
     )
 

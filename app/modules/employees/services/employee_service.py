@@ -18,7 +18,11 @@ from app.modules.employees.schemas import EmployeeResponse
 from app.modules.users.users.repositories import UserQueries, UserCommands
 from app.modules.users.rbac.repositories import RoleQueries
 from app.grpc.clients.sso_client import SSOUserGRPCClient
-from app.core.exceptions import NotFoundException, ConflictException, BadRequestException
+from app.core.exceptions import (
+    NotFoundException,
+    ConflictException,
+    BadRequestException,
+)
 from app.core.messaging.event_publisher import EventPublisher
 
 logger = logging.getLogger(__name__)
@@ -59,8 +63,7 @@ class EmployeeService:
         }
         if employee.user:
             data["user"] = {
-                "id": employee.user.id,
-                "sso_id": employee.user.sso_id,
+                "id": employee.user.id,  # SSO UUID
                 "name": employee.user.name,
                 "email": employee.user.email,
                 "phone": employee.user.phone,
@@ -100,7 +103,7 @@ class EmployeeService:
             raise NotFoundException(f"Employee with ID {employee_id} not found")
         return EmployeeResponse.model_validate(employee)
 
-    async def get_by_user_id(self, user_id: int) -> Optional[EmployeeResponse]:
+    async def get_by_user_id(self, user_id: str) -> Optional[EmployeeResponse]:
         employee = await self.queries.get_by_user_id(user_id)
         return EmployeeResponse.model_validate(employee) if employee else None
 
@@ -121,47 +124,54 @@ class EmployeeService:
         is_active: Optional[bool] = None,
     ) -> Tuple[List[EmployeeResponse], Dict[str, Any]]:
         params = PaginationParams(page=page, limit=limit)
-        filters = EmployeeFilters(org_unit_id=org_unit_id, is_active=is_active, search=search)
+        filters = EmployeeFilters(
+            org_unit_id=org_unit_id, is_active=is_active, search=search
+        )
         employees, pagination = await self.queries.list(params, filters)
-        return [EmployeeResponse.model_validate(e) for e in employees], pagination.to_dict()
+        return [
+            EmployeeResponse.model_validate(e) for e in employees
+        ], pagination.to_dict()
 
     async def list_by_org_unit(
         self,
         org_unit_id: int,
         page: int = 1,
         limit: int = 10,
-        include_children: bool = False
+        include_children: bool = False,
     ) -> Tuple[List[EmployeeResponse], Dict[str, Any]]:
         org_unit = await self.org_unit_queries.get_by_id(org_unit_id)
         if not org_unit:
             raise NotFoundException(f"OrgUnit with ID {org_unit_id} not found")
         params = PaginationParams(page=page, limit=limit)
-        employees, pagination = await self.queries.get_by_org_unit(org_unit_id, include_children, params)
-        return [EmployeeResponse.model_validate(e) for e in employees], pagination.to_dict()
+        employees, pagination = await self.queries.get_by_org_unit(
+            org_unit_id, include_children, params
+        )
+        return [
+            EmployeeResponse.model_validate(e) for e in employees
+        ], pagination.to_dict()
 
     async def list_subordinates(
-        self,
-        employee_id: int,
-        page: int = 1,
-        limit: int = 10,
-        recursive: bool = False
+        self, employee_id: int, page: int = 1, limit: int = 10, recursive: bool = False
     ) -> Tuple[List[EmployeeResponse], Dict[str, Any]]:
         employee = await self.queries.get_by_id(employee_id)
         if not employee:
             raise NotFoundException(f"Employee with ID {employee_id} not found")
         params = PaginationParams(page=page, limit=limit)
-        employees, pagination = await self.queries.get_subordinates(employee_id, recursive, params)
-        return [EmployeeResponse.model_validate(e) for e in employees], pagination.to_dict()
+        employees, pagination = await self.queries.get_subordinates(
+            employee_id, recursive, params
+        )
+        return [
+            EmployeeResponse.model_validate(e) for e in employees
+        ], pagination.to_dict()
 
     async def list_deleted(
-        self,
-        page: int = 1,
-        limit: int = 10,
-        search: Optional[str] = None
+        self, page: int = 1, limit: int = 10, search: Optional[str] = None
     ) -> Tuple[List[EmployeeResponse], Dict[str, Any]]:
         params = PaginationParams(page=page, limit=limit)
         employees, pagination = await self.queries.list_deleted(params, search)
-        return [EmployeeResponse.model_validate(e) for e in employees], pagination.to_dict()
+        return [
+            EmployeeResponse.model_validate(e) for e in employees
+        ], pagination.to_dict()
 
     async def create(
         self,
@@ -169,7 +179,7 @@ class EmployeeService:
         first_name: str,
         last_name: str,
         email: str,
-        created_by: int,
+        created_by: str,
         org_unit_id: Optional[int] = None,
         phone: Optional[str] = None,
         position: Optional[str] = None,
@@ -194,7 +204,7 @@ class EmployeeService:
 
         if existing_sso:
             sso_user = existing_sso
-            local_user = await self.user_queries.get_by_sso_id(sso_user["id"])
+            local_user = await self.user_queries.get_by_id(sso_user["id"])
             if local_user:
                 existing_emp = await self.queries.get_by_user_id(local_user.id)
                 if existing_emp:
@@ -205,31 +215,38 @@ class EmployeeService:
                 email=email, name=full_name, phone=phone, gender=gender, role="user"
             )
             if not create_result.get("success"):
-                raise ConflictException(f"Failed to create SSO user: {create_result.get('error')}")
+                raise ConflictException(
+                    f"Failed to create SSO user: {create_result.get('error')}"
+                )
             sso_user = create_result["user"]
             temp_password = create_result.get("temporary_password")
 
-        local_user = await self.user_queries.get_by_sso_id(sso_user["id"])
+        local_user = await self.user_queries.get_by_id(sso_user["id"])
         if not local_user:
-            local_user = await self.user_commands.create({
-                "sso_id": sso_user["id"],
-                "name": sso_user.get("name", full_name),
-                "email": sso_user.get("email", email),
-                "phone": sso_user.get("phone", phone),
-                "gender": sso_user.get("gender", gender),
-                "avatar_path": sso_user.get("avatar_path"),
-                "is_active": True,
-                "synced_at": datetime.utcnow(),
-            })
+            local_user = await self.user_commands.create(
+                {
+                    "id": sso_user["id"],  # SSO UUID as primary key
+                    "name": sso_user.get("name", full_name),
+                    "email": sso_user.get("email", email),
+                    "phone": sso_user.get("phone", phone),
+                    "gender": sso_user.get("gender", gender),
+                    "avatar_path": sso_user.get("avatar_path"),
+                    "is_active": True,
+                    "synced_at": datetime.utcnow(),
+                }
+            )
         else:
-            await self.user_commands.update(local_user.id, {
-                "name": sso_user.get("name", full_name),
-                "email": sso_user.get("email", email),
-                "phone": sso_user.get("phone", phone),
-                "gender": sso_user.get("gender", gender),
-                "synced_at": datetime.utcnow(),
-            })
-            local_user = await self.user_queries.get(local_user.id)
+            await self.user_commands.update(
+                local_user.id,
+                {
+                    "name": sso_user.get("name", full_name),
+                    "email": sso_user.get("email", email),
+                    "phone": sso_user.get("phone", phone),
+                    "gender": sso_user.get("gender", gender),
+                    "synced_at": datetime.utcnow(),
+                },
+            )
+            local_user = await self.user_queries.get_by_id(local_user.id)
 
         auto_supervisor = supervisor_id
         if not auto_supervisor and org_unit_id:
@@ -242,7 +259,7 @@ class EmployeeService:
             type=employee_type,
             org_unit_id=org_unit_id,
             supervisor_id=auto_supervisor,
-            is_active=True
+            is_active=True,
         )
         employee.set_created_by(created_by)
 
@@ -251,12 +268,16 @@ class EmployeeService:
 
         await self._publish_event("created", created)
 
-        return EmployeeResponse.model_validate(created), temp_password, warnings if warnings else None
+        return (
+            EmployeeResponse.model_validate(created),
+            temp_password,
+            warnings if warnings else None,
+        )
 
     async def update(
         self,
         employee_id: int,
-        updated_by: int,
+        updated_by: str,
         first_name: Optional[str] = None,
         last_name: Optional[str] = None,
         phone: Optional[str] = None,
@@ -276,7 +297,7 @@ class EmployeeService:
         if not employee.user_id:
             raise BadRequestException("Employee has no linked user")
 
-        local_user = await self.user_queries.get(employee.user_id)
+        local_user = await self.user_queries.get_by_id(employee.user_id)
         if not local_user:
             raise NotFoundException(f"User with ID {employee.user_id} not found")
 
@@ -288,10 +309,10 @@ class EmployeeService:
             ln = last_name if last_name else (parts[1] if len(parts) > 1 else "")
             full_name = f"{fn} {ln}".strip()
 
-        if local_user.sso_id and (full_name or phone or gender):
+        if local_user.id and (full_name or phone or gender):
             try:
                 sso_result = await self.sso_client.update_user(
-                    user_id=local_user.sso_id, name=full_name, phone=phone, gender=gender
+                    user_id=local_user.id, name=full_name, phone=phone, gender=gender
                 )
                 if sso_result.get("success"):
                     sso_user = sso_result.get("user", {})
@@ -329,7 +350,7 @@ class EmployeeService:
 
         return EmployeeResponse.model_validate(updated), warnings if warnings else None
 
-    async def delete(self, employee_id: int, deleted_by: int) -> Dict[str, Any]:
+    async def delete(self, employee_id: int, deleted_by: str) -> Dict[str, Any]:
         employee = await self.queries.get_by_id(employee_id)
         if not employee:
             raise NotFoundException(f"Employee with ID {employee_id} not found")
@@ -338,15 +359,17 @@ class EmployeeService:
 
         is_head = await self.org_unit_queries.is_head_of_any_unit(employee_id)
         if is_head:
-            raise BadRequestException("Cannot delete: employee is org unit head. Reassign first.")
+            raise BadRequestException(
+                "Cannot delete: employee is org unit head. Reassign first."
+            )
 
         local_user = None
         if employee.user_id:
-            local_user = await self.user_queries.get(employee.user_id)
+            local_user = await self.user_queries.get_by_id(employee.user_id)
 
-        if local_user and local_user.sso_id:
+        if local_user and local_user.id:
             try:
-                result = await self.sso_client.delete_user(local_user.sso_id)
+                result = await self.sso_client.delete_user(local_user.id)
                 if not result.get("success"):
                     warnings.append(f"SSO deactivate failed: {result.get('error')}")
             except Exception as e:
@@ -355,7 +378,9 @@ class EmployeeService:
         subordinates = await self.queries.get_all_by_supervisor(employee_id)
         if subordinates:
             subordinate_ids = [s.id for s in subordinates]
-            await self.commands.bulk_update_supervisor(subordinate_ids, employee.supervisor_id, deleted_by)
+            await self.commands.bulk_update_supervisor(
+                subordinate_ids, employee.supervisor_id, deleted_by
+            )
 
         await self.commands.delete(employee_id, deleted_by)
 

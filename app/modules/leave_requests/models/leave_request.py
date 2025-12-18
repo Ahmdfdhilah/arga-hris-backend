@@ -25,17 +25,11 @@ class LeaveRequest(Base, TimestampMixin):
     end_date: Mapped[DateType] = mapped_column(Date, nullable=False)
     total_days: Mapped[int] = mapped_column(Integer, nullable=False)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
-    created_by: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    created_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
 
     __table_args__ = (
-        CheckConstraint(
-            "leave_type IN ('leave', 'holiday')",
-            name="check_leave_type"
-        ),
-        CheckConstraint(
-            "total_days > 0",
-            name="check_total_days_positive"
-        ),
+        CheckConstraint("leave_type IN ('leave', 'holiday')", name="check_leave_type"),
+        CheckConstraint("total_days > 0", name="check_total_days_positive"),
     )
 
     def __repr__(self) -> str:

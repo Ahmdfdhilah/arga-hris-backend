@@ -1,10 +1,16 @@
 from typing import Annotated
 from fastapi import Depends
 from app.core.dependencies.database import PostgresDB
-from app.modules.users.users.repositories.user_repository import UserRepository
-
-def get_user_repository(db: PostgresDB) -> UserRepository:
-    return UserRepository(db)
+from app.modules.users.users.repositories import UserQueries, UserCommands
 
 
-UserRepositoryDep = Annotated[UserRepository, Depends(get_user_repository)]
+def get_user_queries(db: PostgresDB) -> UserQueries:
+    return UserQueries(db)
+
+
+def get_user_commands(db: PostgresDB) -> UserCommands:
+    return UserCommands(db)
+
+
+UserQueriesDep = Annotated[UserQueries, Depends(get_user_queries)]
+UserCommandsDep = Annotated[UserCommands, Depends(get_user_commands)]

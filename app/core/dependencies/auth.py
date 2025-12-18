@@ -31,9 +31,7 @@ def _load_public_key() -> str:
 def _verify_token_locally(token: str) -> dict:
     try:
         payload = jwt.decode(
-            token,
-            _load_public_key(),
-            algorithms=[settings.JWT_ALGORITHM]
+            token, _load_public_key(), algorithms=[settings.JWT_ALGORITHM]
         )
         if payload.get("type") != "access":
             raise UnauthorizedException("Invalid token type")
@@ -73,68 +71,66 @@ async def get_current_user(
 ) -> CurrentUser:
     """
     Get current user with local JWT validation (hybrid approach).
-    
+
     1. Validate token locally with public key (no network call)
-    2. Find/create HRIS user by sso_id
+    2. Find/create HRIS user by id (SSO UUID)
     3. Get HRIS-specific roles/permissions
     """
-    from app.modules.users.users.repositories.user_repository import UserRepository
+    from app.modules.users.users.repositories import UserQueries, UserCommands
     from app.modules.users.rbac.repositories.role_repository import RoleRepository
-    # from app.grpc.clients.employee_client import EmployeeGRPCClient  # TODO: create if needed
-    # from app.grpc.clients.org_unit_client import OrgUnitGRPCClient  # TODO: create if needed
-    from app.config.database import get_db
+    from app.modules.employees.repositories import EmployeeQueries
+    from app.config.database import get_db_context
 
     try:
         payload = _verify_token_locally(token)
-        
-        sso_id = payload.get("sub")
-        if not sso_id:
+
+        user_id = payload.get("sub")  # SSO UUID is the user.id
+        if not user_id:
             raise UnauthorizedException("Token missing user ID")
-        
+
         sso_user = {
-            "id": sso_id,
+            "id": user_id,
             "name": payload.get("name"),
             "role": payload.get("role", "user"),
             "email": None,
             "avatar_url": None,
         }
-        
-        db_gen = get_db()
-        db = await db_gen.__anext__()
 
-        user_repo = UserRepository(db)
-        role_repo = RoleRepository(db)
-        employee_client = EmployeeGRPCClient()
-        org_unit_client = OrgUnitGRPCClient()
+        async with get_db_context() as db:
+            user_queries = UserQueries(db)
+            user_commands = UserCommands(db)
+            role_repo = RoleRepository(db)
+            employee_queries = EmployeeQueries(db)
 
-        user = await user_repo.get_by_sso_id(sso_id)
+            user = await user_queries.get_by_id(user_id)  # Direct lookup by ID
 
-        if not user:
-            user = await _create_hris_user(
-                user_repo, role_repo, employee_client, org_unit_client,
-                sso_id, sso_user
+            if not user:
+                user = await _create_hris_user(
+                    user_commands, role_repo, user_id, sso_user
+                )
+                await db.commit()
+
+            if not user.is_active:
+                raise UnauthorizedException("Akun pengguna tidak aktif di HRIS")
+
+            user_roles = await role_repo.get_user_roles(user.id)
+            user_permissions = await role_repo.get_user_permissions(user.id)
+
+            # Separate query for employee to avoid lazy loading issues
+            employee = await employee_queries.get_by_user_id(user.id)
+
+            return CurrentUser(
+                id=user.id,  # user.id is the SSO UUID
+                employee_id=employee.id if employee else None,
+                org_unit_id=employee.org_unit_id if employee else None,
+                name=sso_user.get("name") or "",
+                email=sso_user.get("email"),
+                avatar_url=sso_user.get("avatar_url"),
+                sso_role=sso_user.get("role", "user"),
+                roles=user_roles or [],
+                permissions=user_permissions or [],
+                is_active=user.is_active,
             )
-            await db.commit()
-
-        if not user.is_active:
-            raise UnauthorizedException("Akun pengguna tidak aktif di HRIS")
-
-        user_roles = await role_repo.get_user_roles(user.id)
-        user_permissions = await role_repo.get_user_permissions(user.id)
-
-        return CurrentUser(
-            id=user.id,
-            employee_id=user.employee_id,
-            org_unit_id=user.org_unit_id,
-            sso_id=sso_id,
-            name=sso_user.get("name") or "",
-            email=sso_user.get("email"),
-            avatar_url=sso_user.get("avatar_url"),
-            sso_role=sso_user.get("role", "user"),
-            roles=user_roles or [],
-            permissions=user_permissions or [],
-            is_active=user.is_active,
-        )
 
     except UnauthorizedException as e:
         raise HTTPException(
@@ -153,10 +149,13 @@ async def get_current_user(
         )
 
 
-async def _create_hris_user(user_repo, role_repo, employee_client, org_unit_client, sso_id: str, sso_user: dict):
+async def _create_hris_user(user_commands, role_repo, user_id: str, sso_user: dict):
     """Create HRIS user on first login (JIT provisioning)."""
-    
-    user = await user_repo.create_from_sso(sso_id=sso_id)
+
+    user = await user_commands.create_from_sso(
+        sso_id=user_id,  # This sets user.id = user_id
+        name=sso_user.get("name") or "",
+    )
 
     try:
         role = await role_repo.get_role_by_name("employee")
@@ -165,47 +164,7 @@ async def _create_hris_user(user_repo, role_repo, employee_client, org_unit_clie
     except Exception as e:
         logger.warning(f"Failed to assign role to user {user.id}: {str(e)}")
 
-    email = sso_user.get("email")
-    if email:
-        try:
-            employee_data = await employee_client.get_employee_by_email(email)
-            if employee_data:
-                employee_id = int(employee_data.get("id"))
-                org_unit_id = employee_data.get("org_unit_id")
-                
-                # Check if this employee is already linked to another user
-                existing = await user_repo.get_by_employee_id(employee_id)
-                if not existing:
-                    await user_repo.link_employee(user.id, employee_id, org_unit_id)
-                    user.employee_id = employee_id
-                    user.org_unit_id = org_unit_id
-                    logger.info(f"User {user.id} linked to employee {employee_id}")
-
-                    # Check if org unit head
-                    await _check_and_assign_org_unit_head_role(
-                        role_repo, org_unit_client, user.id, employee_id
-                    )
-        except Exception as e:
-            logger.warning(f"Failed to auto-link employee: {str(e)}")
-
     return user
-
-
-async def _check_and_assign_org_unit_head_role(role_repo, org_unit_client, user_id: int, employee_id: int):
-    """Check if employee is org unit head and assign role."""
-    try:
-        result = await org_unit_client.list_org_units(page=1, limit=1000, is_active=True)
-        org_units = result.get("org_units", [])
-
-        for org_unit in org_units:
-            if org_unit.get("head_id") == employee_id:
-                org_unit_head_role = await role_repo.get_role_by_name("org_unit_head")
-                if org_unit_head_role:
-                    await role_repo.assign_role(user_id, org_unit_head_role.id)
-                    logger.info(f"Org unit head role assigned to user {user_id}")
-                break
-    except Exception as e:
-        logger.warning(f"Failed to check/assign org unit head role: {str(e)}")
 
 
 async def get_current_active_user(
