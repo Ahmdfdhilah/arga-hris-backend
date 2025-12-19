@@ -26,8 +26,7 @@ import sys
 import uuid
 import re
 from pathlib import Path
-from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Any
 
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
@@ -39,7 +38,7 @@ from sqlalchemy.orm import Session
 WORKFORCE_DUMP = Path(__file__).parent.parent / "sql" / "dump" / "arga_workforce.sql"
 SSO_DATABASE_URL = "postgresql://postgres:tanyafadil@localhost:5432/arga_sso_v2"
 HRIS_DATABASE_URL = "postgresql://postgres:tanyafadil@localhost:5432/hris"
-HRIS_APP_CODE = "HRARGA"
+HRIS_APP_CODE = "hris-arga"
 ADMIN_USER_ID = None
 
 

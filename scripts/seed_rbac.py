@@ -21,6 +21,10 @@ from app.modules.users.rbac.models.user_role import UserRole
 from app.modules.users.users.models.user import User
 from app.modules.employees.models.employee import Employee  # noqa: F401
 from app.modules.org_units.models.org_unit import OrgUnit  # noqa: F401
+from app.modules.leave_requests.models.leave_request import LeaveRequest  # noqa: F401
+from app.modules.employee_assignments.models.employee_assignment import (
+    EmployeeAssignment,
+)  # noqa: F401
 
 
 # Default roles
@@ -193,6 +197,25 @@ PERMISSIONS = [
         "resource": "roles",
         "action": "write",
     },
+    # Employee Assignments
+    {
+        "code": "assignment.create",
+        "description": "Create employee assignments",
+        "resource": "assignment",
+        "action": "create",
+    },
+    {
+        "code": "assignment.read",
+        "description": "View employee assignments",
+        "resource": "assignment",
+        "action": "read",
+    },
+    {
+        "code": "assignment.cancel",
+        "description": "Cancel employee assignments",
+        "resource": "assignment",
+        "action": "cancel",
+    },
 ]
 
 # Role-permission mappings
@@ -215,6 +238,9 @@ ROLE_PERMISSIONS = {
         "dashboard:read_all",
         "roles:read",
         "roles:write",
+        "assignment.create",
+        "assignment.read",
+        "assignment.cancel",
     ],
     "org_unit_head": [
         "employees:read",
@@ -229,6 +255,7 @@ ROLE_PERMISSIONS = {
         "work:review",
         "org_units:read",
         "dashboard:read",
+        "assignment.read",
     ],
     "employee": [
         "attendance:read",

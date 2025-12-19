@@ -34,7 +34,7 @@ class CreateLeaveRequestUseCase:
                 f"Employee dengan ID {request.employee_id} tidak ditemukan"
             )
 
-        employee_type = emp.employee_type
+        employee_type = emp.type
 
         # Validate dates
         validate_leave_dates(request.start_date, request.end_date)

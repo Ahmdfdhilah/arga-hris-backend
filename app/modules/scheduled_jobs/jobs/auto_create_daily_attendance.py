@@ -20,8 +20,7 @@ import logging
 
 from app.core.scheduler.base import BaseScheduledJob
 from app.config.database import get_db_context
-from app.modules.attendance.models.attendance import Attendance
-from app.modules.attendance.repositories import AttendanceQueries, AttendanceCommands
+from app.modules.attendances.repositories import AttendanceQueries, AttendanceCommands
 from app.modules.employees.repositories import EmployeeQueries
 
 logger = logging.getLogger(__name__)

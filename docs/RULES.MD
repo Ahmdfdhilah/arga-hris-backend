@@ -13,27 +13,89 @@
 ```bash
 arga-hris-backend/
 ├── app/
-│   ├── main.py                         # Entry point
+│   ├── main.py                         # Entry point (CLEAN - lihat section 1.1)
 │   ├── config/settings.py              # Env vars
 │   ├── core/                           # Shared Logic
-│   │   ├── exceptions/                 # Custom Exceptions
-│   │   ├── schemas/                    # BaseResponses
+│   │   ├── exceptions/                 # Custom Exceptions semua error raise ambil dari sini
+│   │   ├── schemas/                    # BaseResponses semua response ambil dari sini
 │   │   ├── security/                   # RBAC & Auth
-│   │   └── utils/                      # Global Helpers
+│   │   ├── routers/                    # Router configuration
+│   │   │   ├── system.py              # Health check & root endpoints
+│   │   │   ├── routers.py             # Router registration setup
+│   │   │   └── __init__.py            # Export setup_routers
+│   │   ├── utils/                      # Global Helpers per use case agar atomic
+│   │   │   ├── lifespan.py            # Application lifespan management
+│   │   │   └── ...                    # Other utilities
+│   │   └── enums/                      # Global Enums per use case agar atomic
+│   │
+│   ├── middleware/                     # Middleware & Exception Handlers
+│   │   ├── setup.py                   # Centralized middleware setup
+│   │   ├── cors.py                    # CORS configuration
+│   │   ├── logging.py                 # Request logging middleware
+│   │   ├── error_handler.py           # Exception handlers
+│   │   └── __init__.py                # Export setup_middleware
 │   │
 │   └── modules/{module_name}/          # Domain Modules
 │       ├── models/                     # SQLAlchemy Models
 │       ├── schemas/                    # Pydantic DTOs
-│       ├── repositories/               # Data Access
 │       │   ├── commands/               # Write Ops
 │       │   └── queries/                # Read Ops
-│       ├── use_cases/                  # Pure Business Logic (Atomic)
+│       ├── use_cases/                  # Pure Business Logic (Atomic per usecase)
 │       ├── services/                   # Facade / Wrappers
 │       ├── utils/                      # Module-specific helpers
 │       ├── dependencies.py             # DI Definitions
 │       └── routers/                    # API Endpoints
 └── docs/RULES.MD                       # THIS FILE
 ```
+
+### 1.1 CLEAN MAIN.PY PATTERN (WAJIB)
+
+**PRINSIP**: `main.py` harus BERSIH dan RINGKAS (<50 baris), hanya orchestration.
+
+**Struktur Wajib**:
+
+```python
+"""
+FastAPI Application Entry Point
+"""
+
+from fastapi import FastAPI
+from app.config.settings import settings
+from app.core.utils.logging import setup_logging
+from app.core.utils.lifespan import lifespan
+from app.middleware import setup_middleware
+from app.core.routers import setup_routers
+
+# Setup logging
+setup_logging()
+
+# Initialize FastAPI app
+app = FastAPI(
+    title=settings.APP_NAME,
+    description="ARGA HRIS Service",
+    version=settings.APP_VERSION,
+    lifespan=lifespan,
+)
+
+# Setup middleware and exception handlers
+setup_middleware(app)
+
+# Setup routers
+setup_routers(app)
+```
+
+**Rules**:
+1. **TIDAK BOLEH** ada logic bisnis atau konfigurasi detail di `main.py`
+2. **WAJIB** pisahkan lifespan ke `app/core/utils/lifespan.py`
+3. **WAJIB** pisahkan middleware setup ke `app/middleware/setup.py`
+4. **WAJIB** pisahkan router registration ke `app/core/routers/routers.py`
+5. Health check & root endpoint HARUS di `app/core/routers/system.py`
+
+**File Organization**:
+- `app/core/utils/lifespan.py`: Startup/shutdown events (scheduler, gRPC, RabbitMQ)
+- `app/middleware/setup.py`: CORS, logging, exception handlers registration
+- `app/core/routers/routers.py`: All router includes with prefixes and tags
+- `app/core/routers/system.py`: Root (/) dan health check (/health) endpoints
 
 ---
 

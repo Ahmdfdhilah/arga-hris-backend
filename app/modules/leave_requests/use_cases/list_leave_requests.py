@@ -77,7 +77,7 @@ class ListAllLeaveRequestsUseCase:
         for lr in leave_requests:
             emp = await self.employee_queries.get_by_id(lr.employee_id)
             employee_name = emp.user.name if emp and emp.user else None
-            employee_number = emp.employee_number if emp else None
+            employee_number = emp.number if emp else None
 
             items.append(
                 LeaveRequestListResponse(
@@ -141,11 +141,9 @@ class ListTeamLeaveRequestsUseCase:
 
         items = []
         for lr in leave_requests:
-            # We can map from subordinates list directly to save DB calls if we optimize
-            # But simplistic approach first:
             emp = next((e for e in subordinates if e.id == lr.employee_id), None)
             employee_name = emp.user.name if emp and emp.user else None
-            employee_number = emp.employee_number if emp else None
+            employee_number = emp.number if emp else None
 
             items.append(
                 LeaveRequestListResponse(

@@ -16,11 +16,12 @@ from app.core.schemas import (
     CurrentUser,
     DataResponse,
     PaginatedResponse,
+    create_success_response,
     create_paginated_response,
 )
 from app.core.exceptions import UnprocessableEntityException
 
-router = APIRouter(prefix="/leave-requests", tags=["Leave Requests"])
+router = APIRouter(prefix="/leave-requests")
 
 
 @router.get(
@@ -73,9 +74,13 @@ async def create_leave_request(
 
     **Permission required**: leave_request.create
     """
-    return await service.create_leave_request(
+    result = await service.create_leave_request(
         request=request,
         created_by_user_id=current_user.id,
+    )
+    return create_success_response(
+        message="Leave request berhasil dibuat",
+        data=result,
     )
 
 
@@ -129,7 +134,11 @@ async def get_leave_request(
 
     **Permission required**: leave_request.read
     """
-    return await service.get_leave_request_by_id(leave_request_id)
+    result = await service.get_leave_request_by_id(leave_request_id)
+    return create_success_response(
+        message="Leave request berhasil diambil",
+        data=result,
+    )
 
 
 @router.put("/{leave_request_id}", response_model=DataResponse[LeaveRequestResponse])
@@ -145,9 +154,13 @@ async def update_leave_request(
 
     **Permission required**: leave_request.update
     """
-    return await service.update_leave_request(
+    result = await service.update_leave_request(
         leave_request_id=leave_request_id,
         request=request,
+    )
+    return create_success_response(
+        message="Leave request berhasil diupdate",
+        data=result,
     )
 
 
@@ -163,7 +176,11 @@ async def delete_leave_request(
 
     **Permission required**: leave_request.delete
     """
-    return await service.delete_leave_request(leave_request_id)
+    await service.delete_leave_request(leave_request_id)
+    return create_success_response(
+        message="Leave request berhasil dihapus",
+        data=None,
+    )
 
 
 @router.get(

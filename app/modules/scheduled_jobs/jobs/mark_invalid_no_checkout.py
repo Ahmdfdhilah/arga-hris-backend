@@ -15,7 +15,7 @@ import logging
 from app.core.scheduler.base import BaseScheduledJob
 from app.config.database import get_db_context
 from sqlalchemy import select, and_
-from app.modules.attendance.models.attendance import Attendance
+from app.modules.attendances.models.attendances import Attendance
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,6 @@ class MarkInvalidNoCheckoutJob(BaseScheduledJob):
         today = date.today()
 
         updated_count = 0
-        skipped_count = 0
         error_count = 0
 
         logger.info(

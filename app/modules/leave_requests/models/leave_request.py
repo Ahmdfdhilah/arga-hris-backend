@@ -1,9 +1,15 @@
-from sqlalchemy import String, Integer, Date, Text, CheckConstraint
-from sqlalchemy.orm import Mapped, mapped_column
-from typing import Optional
+from sqlalchemy import String, Integer, Date, Text, CheckConstraint, ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from typing import Optional, TYPE_CHECKING
 from datetime import date as DateType
 from app.config.database import Base
 from app.core.models.base_model import TimestampMixin
+
+if TYPE_CHECKING:
+    from app.modules.employees.models.employee import Employee
+    from app.modules.employee_assignments.models.employee_assignment import (
+        EmployeeAssignment,
+    )
 
 
 class LeaveRequest(Base, TimestampMixin):
@@ -26,6 +32,32 @@ class LeaveRequest(Base, TimestampMixin):
     total_days: Mapped[int] = mapped_column(Integer, nullable=False)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     created_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+
+    # Replacement/Acting - optional fields untuk penggantian sementara
+    replacement_employee_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("employees.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    assignment_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("employee_assignments.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    # Relationships
+    replacement_employee: Mapped[Optional["Employee"]] = relationship(
+        "Employee",
+        foreign_keys=[replacement_employee_id],
+        backref="leave_requests_as_replacement",
+    )
+    assignment: Mapped[Optional["EmployeeAssignment"]] = relationship(
+        "EmployeeAssignment",
+        foreign_keys=[assignment_id],
+        backref="source_leave_request",
+    )
 
     __table_args__ = (
         CheckConstraint("leave_type IN ('leave', 'holiday')", name="check_leave_type"),
