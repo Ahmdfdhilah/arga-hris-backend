@@ -27,7 +27,7 @@ from app.core.schemas import (
 )
 from app.core.exceptions import UnprocessableEntityException
 
-router = APIRouter()
+router = APIRouter(prefix="/attendances", tags=["Attendances"])
 
 
 @router.post("/check-in", response_model=DataResponse[AttendanceResponse])
@@ -195,9 +195,7 @@ async def check_attendance_status(
     if current_user.employee_id is None:
         raise UnprocessableEntityException("employee id tidak valid")
 
-    data = await service.check_attendance_status(
-        employee_id=current_user.employee_id
-    )
+    data = await service.check_attendance_status(employee_id=current_user.employee_id)
     return create_success_response(
         message="Status attendance berhasil diambil", data=data
     )
@@ -363,7 +361,9 @@ async def bulk_mark_present(
     )
 
 
-@router.patch("/{attendance_id}/mark-present", response_model=DataResponse[AttendanceResponse])
+@router.patch(
+    "/{attendance_id}/mark-present", response_model=DataResponse[AttendanceResponse]
+)
 @require_permission("attendance.update")
 async def mark_present_by_id(
     service: AttendanceServiceDep,

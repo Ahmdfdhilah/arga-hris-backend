@@ -6,6 +6,10 @@ from app.modules.leave_requests.repositories import (
     LeaveRequestCommands,
 )
 from app.modules.employees.repositories import EmployeeQueries
+from app.modules.employee_assignments.repositories import (
+    AssignmentCommands,
+    AssignmentQueries,
+)
 from app.modules.leave_requests.schemas.requests import (
     LeaveRequestCreateRequest,
     LeaveRequestUpdateRequest,
@@ -42,22 +46,34 @@ class LeaveRequestService:
         queries: LeaveRequestQueries,
         commands: LeaveRequestCommands,
         employee_queries: EmployeeQueries,
+        assignment_commands: AssignmentCommands,
+        assignment_queries: AssignmentQueries,
     ):
         self.queries = queries
         self.commands = commands
         self.employee_queries = employee_queries
+        self.assignment_commands = assignment_commands
+        self.assignment_queries = assignment_queries
 
         # Initialize Use Cases
-        self.create_uc = CreateLeaveRequestUseCase(queries, commands, employee_queries)
-        self.get_uc = GetLeaveRequestUseCase(queries)
+        self.create_uc = CreateLeaveRequestUseCase(
+            queries, commands, employee_queries, assignment_commands, assignment_queries
+        )
+        self.get_uc = GetLeaveRequestUseCase(
+            queries, employee_queries, assignment_queries
+        )
         self.update_uc = UpdateLeaveRequestUseCase(queries, commands, employee_queries)
         self.delete_uc = DeleteLeaveRequestUseCase(queries, commands)
         self.list_my_uc = ListMyLeaveRequestsUseCase(queries)
-        self.list_all_uc = ListAllLeaveRequestsUseCase(queries, employee_queries)
-        self.list_team_uc = ListTeamLeaveRequestsUseCase(queries, employee_queries)
+        self.list_all_uc = ListAllLeaveRequestsUseCase(
+            queries, employee_queries, assignment_queries
+        )
+        self.list_team_uc = ListTeamLeaveRequestsUseCase(
+            queries, employee_queries, assignment_queries
+        )
 
     async def create_leave_request(
-        self, request: LeaveRequestCreateRequest, created_by_user_id: int
+        self, request: LeaveRequestCreateRequest, created_by_user_id: str
     ) -> LeaveRequestResponse:
         return await self.create_uc.execute(request, created_by_user_id)
 

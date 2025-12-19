@@ -7,6 +7,7 @@ from app.modules.leave_requests.schemas.responses import (
 from app.modules.leave_requests.schemas.shared import LeaveType
 from app.modules.leave_requests.repositories import LeaveRequestQueries
 from app.modules.employees.repositories import EmployeeQueries
+from app.modules.employee_assignments.repositories import AssignmentQueries
 from app.core.exceptions import BadRequestException
 
 
@@ -44,9 +45,15 @@ class ListMyLeaveRequestsUseCase:
 
 
 class ListAllLeaveRequestsUseCase:
-    def __init__(self, queries: LeaveRequestQueries, employee_queries: EmployeeQueries):
+    def __init__(
+        self,
+        queries: LeaveRequestQueries,
+        employee_queries: EmployeeQueries,
+        assignment_queries: Optional[AssignmentQueries] = None,
+    ):
         self.queries = queries
         self.employee_queries = employee_queries
+        self.assignment_queries = assignment_queries
 
     async def execute(
         self,
@@ -79,6 +86,15 @@ class ListAllLeaveRequestsUseCase:
             employee_name = emp.user.name if emp and emp.user else None
             employee_number = emp.number if emp else None
 
+            # Get replacement employee name if exists
+            replacement_employee_name = None
+            if lr.replacement_employee_id:
+                replacement_emp = await self.employee_queries.get_by_id(
+                    lr.replacement_employee_id
+                )
+                if replacement_emp and replacement_emp.user:
+                    replacement_employee_name = replacement_emp.user.name
+
             items.append(
                 LeaveRequestListResponse(
                     id=lr.id,
@@ -90,6 +106,7 @@ class ListAllLeaveRequestsUseCase:
                     end_date=lr.end_date,
                     total_days=lr.total_days,
                     reason=lr.reason,
+                    replacement_employee_name=replacement_employee_name,
                     created_at=lr.created_at,
                     updated_at=lr.updated_at,
                 )
@@ -99,9 +116,15 @@ class ListAllLeaveRequestsUseCase:
 
 
 class ListTeamLeaveRequestsUseCase:
-    def __init__(self, queries: LeaveRequestQueries, employee_queries: EmployeeQueries):
+    def __init__(
+        self,
+        queries: LeaveRequestQueries,
+        employee_queries: EmployeeQueries,
+        assignment_queries: Optional[AssignmentQueries] = None,
+    ):
         self.queries = queries
         self.employee_queries = employee_queries
+        self.assignment_queries = assignment_queries
 
     async def execute(
         self,
@@ -145,6 +168,15 @@ class ListTeamLeaveRequestsUseCase:
             employee_name = emp.user.name if emp and emp.user else None
             employee_number = emp.number if emp else None
 
+            # Get replacement employee name if exists
+            replacement_employee_name = None
+            if lr.replacement_employee_id:
+                replacement_emp = await self.employee_queries.get_by_id(
+                    lr.replacement_employee_id
+                )
+                if replacement_emp and replacement_emp.user:
+                    replacement_employee_name = replacement_emp.user.name
+
             items.append(
                 LeaveRequestListResponse(
                     id=lr.id,
@@ -156,6 +188,7 @@ class ListTeamLeaveRequestsUseCase:
                     end_date=lr.end_date,
                     total_days=lr.total_days,
                     reason=lr.reason,
+                    replacement_employee_name=replacement_employee_name,
                     created_at=lr.created_at,
                     updated_at=lr.updated_at,
                 )

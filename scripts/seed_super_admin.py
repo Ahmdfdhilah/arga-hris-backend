@@ -29,6 +29,10 @@ from app.modules.users.rbac.models.role import Role
 from app.modules.users.rbac.models.user_role import UserRole
 from app.modules.employees.models.employee import Employee  # noqa: F401
 from app.modules.org_units.models.org_unit import OrgUnit  # noqa: F401
+from app.modules.leave_requests.models.leave_request import LeaveRequest  # noqa: F401
+from app.modules.employee_assignments.models.employee_assignment import (  # noqa: F401
+    EmployeeAssignment,
+)
 
 
 def create_super_admin():

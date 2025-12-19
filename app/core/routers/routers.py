@@ -2,8 +2,7 @@
 Centralized router configuration.
 """
 
-from typing import Sequence
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI
 from app.config.settings import settings
 from app.modules.auth.routers import auth
 from app.modules.users.rbac.routers import roles
@@ -24,23 +23,19 @@ def setup_routers(app: FastAPI) -> None:
     Args:
         app: FastAPI application instance
     """
-    # System routes (/, /health) tanpa prefix
     app.include_router(system_router, tags=["System"])
 
-    # API routes dengan prefix /api/v1
-    routers: Sequence[tuple[APIRouter, str, Sequence[str]]] = [
-        (auth.router, "", ("Authentication",)),
-        (roles.router, "", ("Roles & RBAC",)),
-        (employees.router, "", ("Employees",)),
-        (org_units.router, "", ("Organization Units",)),
-        (attendances.router, "", ("Attendances",)),
-        (leave_requests.router, "", ("Leave Requests",)),
-        (scheduled_jobs.router, "", ("Scheduled Jobs",)),
-        (dashboard.router, "", ("Dashboard",)),
-        (assignments.router, "", ("Employee Assignments",)),
+    routers = [
+        auth.router,
+        roles.router,
+        employees.router,
+        org_units.router,
+        attendances.router,
+        leave_requests.router,
+        scheduled_jobs.router,
+        dashboard.router,
+        assignments.router,
     ]
 
-    for router, prefix, tags in routers:
-        app.include_router(
-            router, prefix=f"{settings.API_PREFIX}{prefix}", tags=list(tags)
-        )
+    for router in routers:
+        app.include_router(router, prefix=settings.API_PREFIX)

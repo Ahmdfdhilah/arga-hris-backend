@@ -21,7 +21,7 @@ from app.core.schemas import (
 )
 from app.core.exceptions import UnprocessableEntityException
 
-router = APIRouter(prefix="/leave-requests")
+router = APIRouter(prefix="/leave-requests", tags=["Leave Requests"])
 
 
 @router.get(

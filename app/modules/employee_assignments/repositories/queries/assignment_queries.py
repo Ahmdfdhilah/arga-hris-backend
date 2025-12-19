@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from app.modules.employee_assignments.models.employee_assignment import (
     EmployeeAssignment,
 )
+from app.modules.employees.models.employee import Employee
 
 
 class AssignmentQueries:
@@ -27,8 +28,10 @@ class AssignmentQueries:
 
         if load_relationships:
             query = query.options(
-                selectinload(EmployeeAssignment.employee),
-                selectinload(EmployeeAssignment.replaced_employee),
+                selectinload(EmployeeAssignment.employee).selectinload(Employee.user),
+                selectinload(EmployeeAssignment.replaced_employee).selectinload(
+                    Employee.user
+                ),
                 selectinload(EmployeeAssignment.org_unit),
                 selectinload(EmployeeAssignment.leave_request),
             )
@@ -71,11 +74,13 @@ class AssignmentQueries:
         count_query = select(func.count()).select_from(query.subquery())
         total = (await self.db.execute(count_query)).scalar_one()
 
-        # Eager loading
+        # Eager loading with nested user
         if load_relationships:
             query = query.options(
-                selectinload(EmployeeAssignment.employee),
-                selectinload(EmployeeAssignment.replaced_employee),
+                selectinload(EmployeeAssignment.employee).selectinload(Employee.user),
+                selectinload(EmployeeAssignment.replaced_employee).selectinload(
+                    Employee.user
+                ),
                 selectinload(EmployeeAssignment.org_unit),
                 selectinload(EmployeeAssignment.leave_request),
             )
@@ -104,8 +109,10 @@ class AssignmentQueries:
                 )
             )
             .options(
-                selectinload(EmployeeAssignment.employee),
-                selectinload(EmployeeAssignment.replaced_employee),
+                selectinload(EmployeeAssignment.employee).selectinload(Employee.user),
+                selectinload(EmployeeAssignment.replaced_employee).selectinload(
+                    Employee.user
+                ),
                 selectinload(EmployeeAssignment.org_unit),
                 selectinload(EmployeeAssignment.leave_request),
             )
@@ -124,8 +131,10 @@ class AssignmentQueries:
                 )
             )
             .options(
-                selectinload(EmployeeAssignment.employee),
-                selectinload(EmployeeAssignment.replaced_employee),
+                selectinload(EmployeeAssignment.employee).selectinload(Employee.user),
+                selectinload(EmployeeAssignment.replaced_employee).selectinload(
+                    Employee.user
+                ),
                 selectinload(EmployeeAssignment.org_unit),
                 selectinload(EmployeeAssignment.leave_request),
             )
@@ -141,8 +150,10 @@ class AssignmentQueries:
             select(EmployeeAssignment)
             .where(EmployeeAssignment.leave_request_id == leave_request_id)
             .options(
-                selectinload(EmployeeAssignment.employee),
-                selectinload(EmployeeAssignment.replaced_employee),
+                selectinload(EmployeeAssignment.employee).selectinload(Employee.user),
+                selectinload(EmployeeAssignment.replaced_employee).selectinload(
+                    Employee.user
+                ),
                 selectinload(EmployeeAssignment.org_unit),
                 selectinload(EmployeeAssignment.leave_request),
             )
@@ -165,7 +176,9 @@ class AssignmentQueries:
                 )
             )
             .options(
-                selectinload(EmployeeAssignment.replaced_employee),
+                selectinload(EmployeeAssignment.replaced_employee).selectinload(
+                    Employee.user
+                ),
                 selectinload(EmployeeAssignment.org_unit),
             )
         )

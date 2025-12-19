@@ -9,7 +9,7 @@ from app.core.dependencies.auth import get_current_user
 from app.core.schemas import CurrentUser, DataResponse, create_success_response
 from app.modules.auth.schemas import CurrentUserResponse
 
-router = APIRouter()
+router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 @router.get("/me", response_model=DataResponse[CurrentUserResponse])

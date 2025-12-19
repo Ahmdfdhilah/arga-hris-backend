@@ -25,7 +25,7 @@ from app.core.schemas import (
     create_paginated_response,
 )
 
-router = APIRouter(prefix="/assignments")
+router = APIRouter(prefix="/assignments", tags=["Employee Assignments"])
 
 
 @router.post("/", status_code=201, response_model=DataResponse[AssignmentResponse])
