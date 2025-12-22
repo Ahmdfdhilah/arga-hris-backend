@@ -5,7 +5,7 @@ Represents organizational structure with hierarchical relationships.
 This is the master data, owned by HRIS.
 """
 
-from sqlalchemy import String, Integer, Boolean, Text, ForeignKey, Index
+from sqlalchemy import String, Integer, Boolean, Text, ForeignKey, Index, DateTime
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import Optional, List, TYPE_CHECKING
@@ -56,7 +56,7 @@ class OrgUnit(Base, TimestampMixin):
     # Audit fields for soft delete - UUID strings
     created_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
     updated_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
-    deleted_at: Mapped[Optional[datetime]] = mapped_column(nullable=True, index=True)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     deleted_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
 
     # Relationships

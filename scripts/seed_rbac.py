@@ -152,6 +152,18 @@ PERMISSIONS = [
         "resource": "leave",
         "action": "write",
     },
+       {
+        "code": "leave:update",
+        "description": "Update leave requests",
+        "resource": "leave",
+        "action": "update",
+    },
+          {
+        "code": "leave:delete",
+        "description": "Delete leave requests",
+        "resource": "leave",
+        "action": "delete",
+    },
     {
         "code": "leave:approve",
         "description": "Approve leave requests",
@@ -279,6 +291,8 @@ ROLE_PERMISSIONS = {
         "attendance:approve",
         "attendance:export",
         "leave:read_all",
+        "leave:delete",
+        "leave:update",
         "leave:approve",
         "work:read_all",
         "work:review",

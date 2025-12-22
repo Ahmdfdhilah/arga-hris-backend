@@ -59,7 +59,7 @@ class UpdateLeaveRequestUseCase:
                     f"Employee {leave_request.employee_id} not found"
                 )
 
-            employee_type = emp.employee_type
+            employee_type = emp.type
 
             if "start_date" in update_data:
                 leave_request.start_date = update_data["start_date"]

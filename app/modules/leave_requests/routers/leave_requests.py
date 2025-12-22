@@ -142,7 +142,7 @@ async def get_leave_request(
 
 
 @router.put("/{leave_request_id}", response_model=DataResponse[LeaveRequestResponse])
-@require_permission("leave:approve")
+@require_permission("leave:update")
 async def update_leave_request(
     leave_request_id: int,
     request: LeaveRequestUpdateRequest,
@@ -152,7 +152,7 @@ async def update_leave_request(
     """
     Update leave request (HR Admin/Super Admin only).
 
-    **Permission required**: leave:approve
+    **Permission required**: leave:update
     """
     result = await service.update_leave_request(
         leave_request_id=leave_request_id,
@@ -165,7 +165,7 @@ async def update_leave_request(
 
 
 @router.delete("/{leave_request_id}", response_model=DataResponse[None])
-@require_permission("leave:approve")
+@require_permission("leave:delete")
 async def delete_leave_request(
     leave_request_id: int,
     service: LeaveRequestServiceDep,
@@ -174,7 +174,7 @@ async def delete_leave_request(
     """
     Hapus leave request (HR Admin/Super Admin only).
 
-    **Permission required**: leave:approve
+    **Permission required**: leave:delete
     """
     await service.delete_leave_request(leave_request_id)
     return create_success_response(

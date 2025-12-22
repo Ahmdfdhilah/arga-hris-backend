@@ -6,7 +6,7 @@ Profile data is denormalized (name, email) for search/display performance.
 Full user data is stored in User table and synced from SSO.
 """
 
-from sqlalchemy import String, Integer, Boolean, ForeignKey, Index, CheckConstraint
+from sqlalchemy import String, Integer, Boolean, ForeignKey, Index, CheckConstraint, DateTime
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import Optional, List, TYPE_CHECKING
@@ -26,7 +26,6 @@ class Employee(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
-    # Link to user profile (one-to-one) - UUID string
     user_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
@@ -35,7 +34,6 @@ class Employee(Base, TimestampMixin):
         index=True,
     )
 
-    # Denormalized fields from User for search/display performance
     name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True, index=True)
     email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
 
@@ -73,10 +71,9 @@ class Employee(Base, TimestampMixin):
         Boolean, default=True, nullable=False, index=True
     )
 
-    # Audit fields for soft delete - UUID strings
     created_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
     updated_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
-    deleted_at: Mapped[Optional[datetime]] = mapped_column(nullable=True, index=True)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     deleted_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
 
     # Relationships
