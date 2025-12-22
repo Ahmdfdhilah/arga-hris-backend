@@ -13,8 +13,8 @@ from app.modules.employee_assignments.repositories import (
     AssignmentCommands,
 )
 from app.core.exceptions import NotFoundException, BadRequestException
-from app.core.messaging.event_publisher import event_publisher
-from app.core.messaging.events import EventType
+
+from app.modules.employee_assignments.utils import AssignmentEventUtil
 
 
 class ActivateAssignmentUseCase:
@@ -33,16 +33,7 @@ class ActivateAssignmentUseCase:
         assignment_id: int,
         updated_by: Optional[str] = None,
     ) -> AssignmentResponse:
-        """
-        Activate assignment.
-
-        Requirements:
-        - Assignment harus exist
-        - Status harus pending
-
-        Returns:
-            AssignmentResponse dengan status active
-        """
+        """Activate assignment."""
         assignment = await self.queries.get_by_id(assignment_id)
         if not assignment:
             raise NotFoundException(
@@ -54,32 +45,13 @@ class ActivateAssignmentUseCase:
                 f"Assignment tidak bisa diaktifkan. Status saat ini: {assignment.status}"
             )
 
-        # Update status
-        await self.commands.update_status(
-            assignment_id=assignment_id,
-            new_status="active",
-            updated_by=updated_by,
-        )
+        assignment.status = "active"
+        if updated_by:
+            assignment.updated_by = updated_by
 
-        # Reload
-        assignment = await self.queries.get_by_id(assignment_id)
+        await self.commands.update(assignment)
 
-        # Publish event
-        await self._publish_activated_event(assignment)
+        updated = await self.queries.get_by_id(assignment_id)
+        await AssignmentEventUtil.publish("activated", updated)
 
-        return AssignmentResponse.from_orm_with_relationships(assignment)
-
-    async def _publish_activated_event(self, assignment) -> None:
-        """Publish assignment.activated event (custom event type)."""
-        from app.modules.employee_assignments.utils.events import (
-            build_assignment_event_data,
-        )
-
-        event_data = build_assignment_event_data(assignment)
-        # Use UPDATED event type but with "activated" semantic in data
-        await event_publisher.publish_entity_event(
-            event_type=EventType.UPDATED,
-            entity_type="assignment",
-            entity_id=assignment.id,
-            data={**event_data, "event_action": "activated"},
-        )
+        return AssignmentResponse.from_orm_with_relationships(updated)

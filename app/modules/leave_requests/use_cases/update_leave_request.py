@@ -56,7 +56,6 @@ class UpdateLeaveRequestUseCase:
             # Get employee info for calculating working days
             emp = await self.employee_queries.get_by_id(leave_request.employee_id)
             if not emp:
-                # Should technically exist if leave request exists logic holds, but safe check
                 raise NotFoundException(
                     f"Employee {leave_request.employee_id} not found"
                 )

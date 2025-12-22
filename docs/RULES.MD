@@ -119,6 +119,8 @@ setup_routers(app)
     *   **NO DB**: Akses DB hanya via Repository.
     *   **Atomic**: 1 File = 1 Use Case = 1 Public Method (`execute`).
     *   **Input/Output**: DTO (Pydantic Schema) atau Entity.
+    *   **CLEAN**: Use Case hanya berisi orchestration. Helper logic pindah ke `utils/`.
+    *   **NO PRIVATE METHODS**: Jangan buat `_helper_method()` di Use Case. Pindahkan ke Utils.
 *   **Example**: `app/modules/employees/use_cases/create_employee.py`
 
 ```python
@@ -131,6 +133,77 @@ class CreateEmployeeUseCase:
              raise BadRequestException("Belum cukup umur")
         return await self.repo.create(data)
 ```
+
+### C.1 UTILS (`utils/*.py`) - DRY PATTERN (WAJIB)
+
+**PRINSIP**: Ekstrak helper methods dari Use Cases ke Utils agar reusable.
+
+**Struktur Utils Per Module**:
+```
+app/modules/{module_name}/utils/
+├── __init__.py          # Export semua util classes
+├── events.py            # EventUtil: publish domain events
+├── validators.py        # ValidationUtil: business validations
+└── {domain}_helper.py   # Specific helpers (e.g., path_calculator.py)
+```
+
+**Pattern**:
+```python
+# utils/events.py
+class OrgUnitEventUtil:
+    @staticmethod
+    def to_event_data(org_unit: OrgUnit) -> Dict[str, Any]:
+        return {"id": org_unit.id, "name": org_unit.name, ...}
+    
+    @staticmethod
+    async def publish(event_publisher, event_type: str, org_unit: OrgUnit) -> None:
+        if not event_publisher:
+            return
+        data = OrgUnitEventUtil.to_event_data(org_unit)
+        await event_publisher.publish_org_unit_updated(org_unit.id, data)
+```
+
+**Use Case SEBELUM (❌ SALAH)**:
+```python
+class UpdateOrgUnitUseCase:
+    async def execute(self, ...):
+        # ... logic
+        await self._recalculate_path(org_unit)
+        await self._handle_head_change(...)
+        await self._publish_event("updated", org_unit)
+    
+    async def _recalculate_path(self, org_unit):  # ❌ Private method
+        ...
+    async def _handle_head_change(self, ...):     # ❌ Private method
+        ...
+    async def _publish_event(self, ...):          # ❌ Private method
+        ...
+```
+
+**Use Case SESUDAH (✅ BENAR)**:
+```python
+from app.modules.org_units.utils import OrgUnitPathUtil, OrgUnitHeadUtil, OrgUnitEventUtil
+
+class UpdateOrgUnitUseCase:
+    async def execute(self, ...):
+        # ... validation & field updates
+        await self.commands.update(org_unit)
+        
+        if parent_changed:
+            await OrgUnitPathUtil.recalculate_path(self.queries, self.commands, org_unit)
+        
+        if head_changed:
+            await OrgUnitHeadUtil.handle_head_change(...)
+        
+        await OrgUnitEventUtil.publish(self.event_publisher, "updated", org_unit)
+        return org_unit
+```
+
+**Benefits**:
+- ✅ Use Case tetap clean (~50% lebih sedikit lines)
+- ✅ Utils bisa dipakai di Use Case lain
+- ✅ Easier to test (utils bisa di-unit test terpisah)
+- ✅ DRY - tidak ada duplikasi code
 
 ### D. SERVICES / FACADE (`services/*.py`)
 *   **Role**: **ORCHESTRATOR / WRAPPER**.

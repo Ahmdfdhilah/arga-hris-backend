@@ -62,7 +62,6 @@ class GetAttendanceOverviewUseCase:
                 "Tanggal mulai tidak boleh lebih besar dari tanggal akhir"
             )
 
-        # Simplified logic: Use list() for both cases as it supports org_unit_id filter
         skip = (page - 1) * limit
         employees, total = await self.employee_queries.list(
             org_unit_id=org_unit_id,
