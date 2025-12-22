@@ -55,22 +55,22 @@ class BulkMarkPresentUseCase:
                 )
 
                 if existing:
-                    update_data = {
-                        "status": "present",
-                        "check_in_notes": request.notes,
-                    }
-                    await self.commands.update(existing.id, update_data)
+                    existing.status = "present"
+                    existing.check_in_notes = request.notes
+                    await self.commands.update(existing)
                     updated_count += 1
                 else:
-                    attendance_data = {
-                        "employee_id": employee.id,
-                        "org_unit_id": employee.org_unit_id,
-                        "attendance_date": request.attendance_date,
-                        "status": "present",
-                        "check_in_notes": request.notes,
-                        "created_by": created_by,
-                    }
-                    await self.commands.create(attendance_data)
+                    from app.modules.attendances.models.attendances import Attendance
+
+                    attendance = Attendance(
+                        employee_id=employee.id,
+                        org_unit_id=employee.org_unit_id,
+                        attendance_date=request.attendance_date,
+                        status="present",
+                        check_in_notes=request.notes,
+                        created_by=created_by,
+                    )
+                    await self.commands.create(attendance)
                     created_count += 1
             except Exception as e:
                 print(f"Error processing employee {employee.id}: {str(e)}")

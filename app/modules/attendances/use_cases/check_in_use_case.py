@@ -45,7 +45,7 @@ class CheckInUseCase:
         if not employee:
             raise ValidationException("Employee not found")
 
-        employee_type = employee.employee_type
+        employee_type = employee.type
         org_unit_id = employee.org_unit_id
 
         validate_working_day_and_employee_type(today, employee_type)
@@ -76,36 +76,36 @@ class CheckInUseCase:
             )
 
         if existing:
-            update_data = {
-                "check_in_time": now,
-                "check_in_submitted_at": now,
-                "check_in_submitted_ip": client_ip,
-                "check_in_notes": request.notes,
-                "check_in_selfie_path": selfie_path,
-                "check_in_latitude": request.latitude,
-                "check_in_longitude": request.longitude,
-                "check_in_location_name": location_name,
-                "status": "present",
-                "org_unit_id": org_unit_id,
-            }
-            attendance = await self.commands.update(existing.id, update_data)
+            existing.check_in_time = now
+            existing.check_in_submitted_at = now
+            existing.check_in_submitted_ip = client_ip
+            existing.check_in_notes = request.notes
+            existing.check_in_selfie_path = selfie_path
+            existing.check_in_latitude = request.latitude
+            existing.check_in_longitude = request.longitude
+            existing.check_in_location_name = location_name
+            existing.status = "present"
+            existing.org_unit_id = org_unit_id
+            attendance = await self.commands.update(existing)
         else:
-            attendance_data = {
-                "employee_id": employee_id,
-                "org_unit_id": org_unit_id,
-                "attendance_date": today,
-                "status": "present",
-                "check_in_time": now,
-                "check_in_submitted_at": now,
-                "check_in_submitted_ip": client_ip,
-                "check_in_notes": request.notes,
-                "check_in_selfie_path": selfie_path,
-                "check_in_latitude": request.latitude,
-                "check_in_longitude": request.longitude,
-                "check_in_location_name": location_name,
-                "created_by": employee_id,
-            }
-            attendance = await self.commands.create(attendance_data)
+            from app.modules.attendances.models.attendances import Attendance
+
+            attendance = Attendance(
+                employee_id=employee_id,
+                org_unit_id=org_unit_id,
+                attendance_date=today,
+                status="present",
+                check_in_time=now,
+                check_in_submitted_at=now,
+                check_in_submitted_ip=client_ip,
+                check_in_notes=request.notes,
+                check_in_selfie_path=selfie_path,
+                check_in_latitude=request.latitude,
+                check_in_longitude=request.longitude,
+                check_in_location_name=location_name,
+                created_by=str(employee_id),
+            )
+            attendance = await self.commands.create(attendance)
 
         if not attendance:
             raise ValidationException("Gagal membuat atau update data attendance")

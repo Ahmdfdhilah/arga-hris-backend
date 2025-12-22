@@ -77,7 +77,7 @@ class GetAttendanceReportUseCase:
         for employee in all_employees:
             # Generate working days
             employee_working_days = generate_working_days_for_employee(
-                start_date, end_date, employee.employee_type
+                start_date, end_date, employee.type
             )
 
             employee_att_dict = attendance_by_employee_date.get(employee.id, {})
@@ -121,9 +121,9 @@ class GetAttendanceReportUseCase:
             employee_report = EmployeeAttendanceReport(
                 employee_id=employee.id,
                 employee_name=employee.user.name if employee.user else None,
-                employee_number=employee.employee_number,
+                employee_code=employee.code,
                 employee_position=employee.position,
-                employee_type=employee.employee_type,
+                employee_type=employee.type,
                 org_unit_id=employee.org_unit_id,
                 org_unit_name=org_unit_name,
                 attendances=employee_attendances,

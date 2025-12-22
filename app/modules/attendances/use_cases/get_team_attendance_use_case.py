@@ -52,7 +52,7 @@ class GetTeamAttendanceUseCase:
         for att in attendances:
             employee = await self.employee_queries.get_by_id(att.employee_id)
             employee_name = employee.user.name if employee and employee.user else None
-            employee_number = employee.employee_number if employee else None
+            employee_code = employee.code if employee else None
             org_unit_name = (
                 employee.org_unit.name if employee and employee.org_unit else None
             )
@@ -63,7 +63,7 @@ class GetTeamAttendanceUseCase:
             response = AttendanceListResponse.from_orm_with_urls(
                 attendance=att,
                 employee_name=employee_name,
-                employee_number=employee_number,
+                employee_code=employee_code,
                 org_unit_name=org_unit_name,
                 check_in_url=check_in_url,
                 check_out_url=check_out_url,

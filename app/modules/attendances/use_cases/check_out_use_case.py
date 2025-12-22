@@ -47,7 +47,7 @@ class CheckOutUseCase:
         if not employee:
             raise ValidationException("Employee not found")
 
-        employee_type = employee.employee_type
+        employee_type = employee.type
 
         validate_working_day_and_employee_type(today, employee_type)
         await validate_not_on_leave(self.leave_queries, employee_id, today)
@@ -83,19 +83,17 @@ class CheckOutUseCase:
             existing.check_in_time, now
         )
 
-        update_data = {
-            "check_out_time": now,
-            "check_out_submitted_at": now,
-            "check_out_submitted_ip": client_ip,
-            "check_out_notes": request.notes,
-            "check_out_selfie_path": selfie_path,
-            "check_out_latitude": request.latitude,
-            "check_out_longitude": request.longitude,
-            "check_out_location_name": location_name,
-            "work_hours": work_hours,
-            "overtime_hours": overtime_hours,
-        }
-        attendance = await self.commands.update(existing.id, update_data)
+        existing.check_out_time = now
+        existing.check_out_submitted_at = now
+        existing.check_out_submitted_ip = client_ip
+        existing.check_out_notes = request.notes
+        existing.check_out_selfie_path = selfie_path
+        existing.check_out_latitude = request.latitude
+        existing.check_out_longitude = request.longitude
+        existing.check_out_location_name = location_name
+        existing.work_hours = work_hours
+        existing.overtime_hours = overtime_hours
+        attendance = await self.commands.update(existing)
 
         if not attendance:
             raise ValidationException("Gagal update data attendance untuk check-out")

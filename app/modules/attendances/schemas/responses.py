@@ -76,7 +76,7 @@ class AttendanceListResponse(BaseModel):
     id: int
     employee_id: int
     employee_name: Optional[str] = None
-    employee_number: Optional[str] = None
+    employee_code: Optional[str] = None
     org_unit_id: Optional[int] = None
     org_unit_name: Optional[str] = None
     attendance_date: date
@@ -128,7 +128,7 @@ class AttendanceListResponse(BaseModel):
         cls,
         attendance,
         employee_name: Optional[str] = None,
-        employee_number: Optional[str] = None,
+        employee_code: Optional[str] = None,
         org_unit_name: Optional[str] = None,
         check_in_url: Optional[str] = None,
         check_out_url: Optional[str] = None,
@@ -136,7 +136,7 @@ class AttendanceListResponse(BaseModel):
         """Create response from ORM model with employee/org unit info and generated URLs"""
         response = cls.model_validate(attendance)
         response.employee_name = employee_name
-        response.employee_number = employee_number
+        response.employee_code = employee_code
         response.org_unit_name = org_unit_name
         response.check_in_selfie_url = check_in_url
         response.check_out_selfie_url = check_out_url
@@ -167,7 +167,7 @@ class EmployeeAttendanceReport(BaseModel):
 
     employee_id: int
     employee_name: str
-    employee_number: Optional[str] = None
+    employee_code: Optional[str] = None
     employee_position: Optional[str] = None
     employee_type: Optional[str] = None
     org_unit_id: Optional[int] = None
@@ -191,7 +191,7 @@ class EmployeeAttendanceOverview(BaseModel):
 
     employee_id: int
     employee_name: str
-    employee_number: Optional[str] = None
+    employee_code: Optional[str] = None
     employee_position: Optional[str] = None
     org_unit_id: Optional[int] = None
     org_unit_name: Optional[str] = None

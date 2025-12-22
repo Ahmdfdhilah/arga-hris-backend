@@ -15,40 +15,6 @@ class GetAttendanceOverviewUseCase:
         self.queries = queries
         self.employee_queries = employee_queries
 
-    async def _list_employees_dict(
-        self, org_unit_id: Optional[int] = None, page: int = 1, limit: int = 100
-    ) -> Dict[str, Any]:
-        """Helper to list employees as dict"""
-        skip = (page - 1) * limit
-        employees, total = await self.employee_queries.list(
-            org_unit_id=org_unit_id,
-            is_active=True,
-            limit=limit,
-            skip=skip,
-        )
-
-        total_pages = (total + limit - 1) // limit if total > 0 else 0
-
-        return {
-            "employees": [
-                {
-                    "id": e.id,
-                    "name": e.user.name if e.user else None,
-                    "employee_number": e.employee_number,
-                    "position": e.position,
-                    "org_unit": {"name": e.org_unit.name} if e.org_unit else None,
-                    "org_unit_id": e.org_unit_id,
-                }
-                for e in employees
-            ],
-            "pagination": {
-                "page": page,
-                "limit": limit,
-                "total_items": total,
-                "total_pages": total_pages,
-            },
-        }
-
     async def execute(
         self,
         org_unit_id: Optional[int],
@@ -135,7 +101,7 @@ class GetAttendanceOverviewUseCase:
             employee_overview = EmployeeAttendanceOverview(
                 employee_id=employee_id,
                 employee_name=employee.user.name if employee.user else None,
-                employee_number=employee.employee_number,
+                employee_code=employee.code,
                 employee_position=employee.position,
                 org_unit_id=employee.org_unit_id,
                 org_unit_name=org_unit_name,

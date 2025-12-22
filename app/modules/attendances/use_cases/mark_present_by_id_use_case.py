@@ -62,17 +62,15 @@ class MarkPresentByIdUseCase:
         )
         final_notes = f"{notes}. {auto_note}" if notes else auto_note
 
-        update_data = {
-            "status": "present",
-            "check_in_time": check_in_datetime,
-            "check_out_time": check_out_datetime,
-            "work_hours": work_hours,
-            "overtime_hours": overtime_hours,
-            "check_in_notes": final_notes,
-            "check_out_notes": final_notes,
-        }
+        attendance.status = "present"
+        attendance.check_in_time = check_in_datetime
+        attendance.check_out_time = check_out_datetime
+        attendance.work_hours = work_hours
+        attendance.overtime_hours = overtime_hours
+        attendance.check_in_notes = final_notes
+        attendance.check_out_notes = final_notes
 
-        updated_attendance = await self.commands.update(attendance_id, update_data)
+        updated_attendance = await self.commands.update(attendance)
 
         if not updated_attendance:
             raise ValidationException("Gagal update attendance")

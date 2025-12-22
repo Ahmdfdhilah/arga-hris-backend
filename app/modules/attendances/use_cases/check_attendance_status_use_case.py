@@ -27,7 +27,7 @@ class CheckAttendanceStatusUseCase:
         today = date.today()
 
         employee = await self.employee_queries.get_by_id(employee_id)
-        employee_type = employee.employee_type if employee else None
+        employee_type = employee.type if employee else None
 
         working_day = is_working_day(today, employee_type)
 
