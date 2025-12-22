@@ -57,7 +57,7 @@ async def list_all_roles(
 @router.get("/{user_id}", response_model=DataResponse[UserRolesPermissionsResponse])
 @require_permission("roles:read")
 async def get_user_roles_and_permissions(
-    user_id: int,
+    user_id: str,
     service: RoleServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
 ) -> DataResponse[UserRolesPermissionsResponse]:
@@ -75,7 +75,7 @@ async def get_user_roles_and_permissions(
 @router.post("/{user_id}/assign", response_model=DataResponse[RoleAssignmentResponse])
 @require_permission("roles:write")
 async def assign_role_to_user(
-    user_id: int,
+    user_id: str,
     request: AssignRoleRequest,
     service: RoleServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
@@ -98,7 +98,7 @@ async def assign_role_to_user(
 @router.post("/{user_id}/remove", response_model=DataResponse[RoleAssignmentResponse])
 @require_permission("roles:write")
 async def remove_role_from_user(
-    user_id: int,
+    user_id: str,
     request: RemoveRoleRequest,
     service: RoleServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
@@ -124,7 +124,7 @@ async def remove_role_from_user(
 )
 @require_permission("roles:write")
 async def assign_multiple_roles_to_user(
-    user_id: int,
+    user_id: str,
     request: AssignRolesRequest,
     service: RoleServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
