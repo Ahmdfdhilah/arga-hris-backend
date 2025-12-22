@@ -27,7 +27,7 @@ router = APIRouter(prefix="/org-units", tags=["Organization Units"])
 
 
 @router.get("/deleted", response_model=PaginatedResponse[OrgUnitResponse])
-@require_permission("org_unit.view_deleted")
+@require_permission("org_units:view_deleted")
 async def list_deleted_org_units(
     service: OrgUnitServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
@@ -40,7 +40,7 @@ async def list_deleted_org_units(
 
     Returns paginated list of archived org units.
 
-    Required Permission: org_unit.view_deleted
+    Required Permission: org_units:view_deleted
     """
     items, pagination = await service.list_deleted_org_units(
         page=page,
@@ -57,7 +57,7 @@ async def list_deleted_org_units(
 
 
 @router.get("/{org_unit_id}", response_model=DataResponse[OrgUnitResponse])
-@require_permission("org_unit.read")
+@require_permission("org_units:read")
 async def get_org_unit(
     org_unit_id: int,
     service: OrgUnitServiceDep,
@@ -69,7 +69,7 @@ async def get_org_unit(
 
 
 @router.get("/by-code/{code}", response_model=DataResponse[OrgUnitResponse])
-@require_permission("org_unit.read")
+@require_permission("org_units:read")
 async def get_org_unit_by_code(
     code: str,
     service: OrgUnitServiceDep,
@@ -81,7 +81,7 @@ async def get_org_unit_by_code(
 
 
 @router.get("", response_model=PaginatedResponse[OrgUnitResponse])
-@require_permission("org_unit.read")
+@require_permission("org_units:read")
 async def list_org_units(
     service: OrgUnitServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
@@ -107,7 +107,7 @@ async def list_org_units(
 @router.get(
     "/{org_unit_id}/children", response_model=PaginatedResponse[OrgUnitResponse]
 )
-@require_permission("org_unit.read")
+@require_permission("org_units:read")
 async def get_org_unit_children(
     org_unit_id: int,
     service: OrgUnitServiceDep,
@@ -129,7 +129,7 @@ async def get_org_unit_children(
 @router.get(
     "/{org_unit_id}/hierarchy", response_model=DataResponse[OrgUnitHierarchyResponse]
 )
-@require_permission("org_unit.read")
+@require_permission("org_units:read")
 async def get_org_unit_hierarchy(
     org_unit_id: int,
     service: OrgUnitServiceDep,
@@ -143,7 +143,7 @@ async def get_org_unit_hierarchy(
 
 
 @router.get("/types/all", response_model=DataResponse[OrgUnitTypesResponse])
-@require_permission("org_unit.read")
+@require_permission("org_units:read")
 async def get_org_unit_types(
     service: OrgUnitServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
@@ -158,7 +158,7 @@ async def get_org_unit_types(
 
 
 @router.post("", response_model=DataResponse[OrgUnitResponse])
-@require_role(["super_admin", "hr_admin"])
+@require_permission("org_units:write")
 async def create_org_unit(
     request: OrgUnitCreateRequest,
     service: OrgUnitServiceDep,
@@ -183,7 +183,7 @@ async def create_org_unit(
 
 
 @router.post("/bulk-insert", response_model=DataResponse[BulkInsertResult])
-@require_role(["super_admin", "hr_admin"])
+@require_permission("org_units:write")
 async def bulk_insert_org_units(
     service: OrgUnitServiceDep,
     file: UploadFile = File(..., description="Excel file dengan sheet 'Department'"),
@@ -201,7 +201,7 @@ async def bulk_insert_org_units(
     - Head Email: Email kepala unit (opsional)
     - Deskripsi: Deskripsi unit (opsional)
 
-    Required Permission: super_admin atau hr_admin
+    Required Permission: org_units:write
     """
     from app.modules.org_units.schemas.requests import OrgUnitBulkItem
 
@@ -277,7 +277,7 @@ async def bulk_insert_org_units(
 
 
 @router.put("/{org_unit_id}", response_model=DataResponse[OrgUnitResponse])
-@require_role(["super_admin", "hr_admin"])
+@require_permission("org_units:write")
 async def update_org_unit(
     org_unit_id: int,
     request: OrgUnitUpdateRequest,
@@ -301,7 +301,7 @@ async def update_org_unit(
 @router.delete(
     "/{org_unit_id}", response_model=DataResponse[OrgUnitResponse]
 )
-@require_permission("org_unit.soft_delete")
+@require_permission("org_units:write")
 async def soft_delete_org_unit(
     org_unit_id: int,
     service: OrgUnitServiceDep,
@@ -315,7 +315,7 @@ async def soft_delete_org_unit(
     - Validates no active employees exist
     - Validates no child org units exist
 
-    Required Permission: org_unit.soft_delete
+    Required Permission: org_units:write
     """
     data = await service.soft_delete_org_unit(
         org_unit_id=org_unit_id, deleted_by_user_id=current_user.id
@@ -324,7 +324,7 @@ async def soft_delete_org_unit(
 
 
 @router.post("/{org_unit_id}/restore", response_model=DataResponse[OrgUnitResponse])
-@require_permission("org_unit.restore")
+@require_permission("org_units:restore")
 async def restore_org_unit(
     org_unit_id: int,
     service: OrgUnitServiceDep,
@@ -337,7 +337,7 @@ async def restore_org_unit(
     - Restores org unit in workforce service
     - Validates parent is not deleted
 
-    Required Permission: org_unit.restore
+    Required Permission: org_units:restore
     """
     data = await service.restore_org_unit(org_unit_id=org_unit_id)
     return create_success_response(message="Org unit restored successfully", data=data)

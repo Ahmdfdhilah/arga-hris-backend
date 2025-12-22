@@ -31,7 +31,7 @@ router = APIRouter(prefix="/attendances", tags=["Attendances"])
 
 
 @router.post("/check-in", response_model=DataResponse[AttendanceResponse])
-@require_permission("attendance.create")
+@require_permission("attendance:write")
 async def check_in(
     request_obj: Request,
     service: AttendanceServiceDep,
@@ -49,7 +49,7 @@ async def check_in(
     Check-in attendance untuk employee.
 
     **PENTING**: Foto selfie WAJIB diisi untuk check-in.
-    **Permission required**: attendance.create
+    **Permission required**: attendance:write
     """
     check_in_request = CheckInRequest(
         notes=notes, latitude=latitude, longitude=longitude
@@ -67,7 +67,7 @@ async def check_in(
 
 
 @router.post("/check-out", response_model=DataResponse[AttendanceResponse])
-@require_permission("attendance.create")
+@require_permission("attendance:write")
 async def check_out(
     request_obj: Request,
     service: AttendanceServiceDep,
@@ -85,7 +85,7 @@ async def check_out(
     Check-out attendance untuk employee.
 
     **PENTING**: Foto selfie WAJIB diisi untuk check-out.
-    **Permission required**: attendance.create
+    **Permission required**: attendance:write
     """
     check_out_request = CheckOutRequest(
         notes=notes, latitude=latitude, longitude=longitude
@@ -103,7 +103,7 @@ async def check_out(
 
 
 @router.get("/reports", response_model=DataResponse[list[EmployeeAttendanceReport]])
-@require_role(["hr_admin", "super_admin"])
+@require_permission("attendance:export")
 async def get_attendance_report(
     service: AttendanceServiceDep,
     org_unit_id: int = Query(..., gt=0, description="ID org unit (WAJIB)"),
@@ -117,7 +117,7 @@ async def get_attendance_report(
     Return list employees dengan attendance mereka untuk keperluan export Excel.
     Tidak ada paginasi, semua data akan dikembalikan.
 
-    **Role required**: hr_admin, super_admin
+    **Permission required**: attendance:export
     """
     data = await service.get_attendance_report(
         org_unit_id=org_unit_id,
@@ -131,7 +131,7 @@ async def get_attendance_report(
 
 
 @router.get("/overview", response_model=PaginatedResponse[EmployeeAttendanceOverview])
-@require_role(["hr_admin", "super_admin"])
+@require_permission("attendance:read_all")
 async def get_attendance_overview(
     service: AttendanceServiceDep,
     start_date: date = Query(..., description="Tanggal mulai (WAJIB)"),
@@ -153,7 +153,7 @@ async def get_attendance_overview(
 
     Jika org_unit_id tidak diisi, maka akan mengambil semua employees dari seluruh org unit.
 
-    **Role required**: hr_admin, super_admin
+    **Permission required**: attendance:read_all
     """
     items, pagination = await service.get_attendance_overview(
         org_unit_id=org_unit_id,
@@ -175,7 +175,7 @@ async def get_attendance_overview(
     "/check-attendance-status",
     response_model=DataResponse[AttendanceStatusCheckResponse],
 )
-@require_permission("attendance.read_own")
+@require_permission("attendance:read")
 async def check_attendance_status(
     service: AttendanceServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
@@ -190,7 +190,7 @@ async def check_attendance_status(
         - is_working_day: boolean
         - leave_details: dict (detail cuti jika sedang cuti)
 
-    **Permission required**: attendance.read_own
+    **Permission required**: attendance:read
     """
     if current_user.employee_id is None:
         raise UnprocessableEntityException("employee id tidak valid")
@@ -202,7 +202,7 @@ async def check_attendance_status(
 
 
 @router.get("/my-attendance", response_model=PaginatedResponse[AttendanceListResponse])
-@require_permission("attendance.read_own")
+@require_permission("attendance:read")
 async def get_my_attendance(
     service: AttendanceServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
@@ -219,7 +219,7 @@ async def get_my_attendance(
     Ambil attendance history employee sendiri.
     Jika parameter type diisi, maka start_date dan end_date akan diabaikan.
 
-    **Permission required**: attendance.read_own
+    **Permission required**: attendance:read
     """
 
     if current_user.employee_id is None:
@@ -243,7 +243,7 @@ async def get_my_attendance(
 
 
 @router.get("/team", response_model=PaginatedResponse[AttendanceListResponse])
-@require_permission("attendance.read_team")
+@require_permission("attendance:approve")
 async def get_team_attendance(
     service: AttendanceServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
@@ -255,7 +255,11 @@ async def get_team_attendance(
     page: int = Query(1, ge=1, description="Nomor halaman"),
     limit: int = Query(10, ge=1, le=250, description="Jumlah item per halaman"),
 ) -> PaginatedResponse[AttendanceListResponse]:
-    """Ambil attendance team/subordinates (untuk org unit head)."""
+    """
+    Ambil attendance team/subordinates (untuk org unit head).
+    
+    **Permission required**: attendance:approve
+    """
 
     if current_user.employee_id is None:
         raise UnprocessableEntityException("employee id tidak valid")
@@ -278,7 +282,7 @@ async def get_team_attendance(
 
 
 @router.get("/", response_model=PaginatedResponse[AttendanceListResponse])
-@require_role(["hr_admin", "super_admin"])
+@require_permission("attendance:read_all")
 async def get_all_attendances(
     service: AttendanceServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
@@ -299,8 +303,10 @@ async def get_all_attendances(
     limit: int = Query(10, ge=1, le=250, description="Jumlah item per halaman"),
 ) -> PaginatedResponse[AttendanceListResponse]:
     """
-    Ambil semua attendance dengan berbagai filter (admin/super admin only).
+    Ambil semua attendance dengan berbagai filter.
     Jika parameter type diisi, maka start_date dan end_date akan diabaikan.
+    
+    **Permission required**: attendance:read_all
     """
     items, pagination = await service.get_all_attendances(
         type=type,
@@ -322,19 +328,23 @@ async def get_all_attendances(
 
 
 @router.get("/{attendance_id}", response_model=DataResponse[AttendanceResponse])
-@require_permission("attendance.read")
+@require_permission("attendance:read_all")
 async def get_attendance(
     service: AttendanceServiceDep,
     attendance_id: int,
     current_user: CurrentUser = Depends(get_current_user),
 ) -> DataResponse[AttendanceResponse]:
-    """Ambil attendance berdasarkan ID."""
+    """
+    Ambil attendance berdasarkan ID.
+    
+    **Permission required**: attendance:read_all
+    """
     data = await service.get_attendance_by_id(attendance_id)
     return create_success_response(message="Attendance berhasil diambil", data=data)
 
 
 @router.post("/bulk-mark-present", response_model=DataResponse[BulkMarkPresentSummary])
-@require_role(["hr_admin", "super_admin"])
+@require_permission("attendance:write")
 async def bulk_mark_present(
     service: AttendanceServiceDep,
     request: BulkMarkPresentRequest,
@@ -350,6 +360,8 @@ async def bulk_mark_present(
     - Status: present
     - Jika attendance sudah ada pada tanggal tersebut, akan diupdate statusnya dan notes
     - Jika belum ada, akan dibuat attendance baru
+    
+    **Permission required**: attendance:write
     """
     data = await service.bulk_mark_present(
         request=request,
@@ -364,7 +376,7 @@ async def bulk_mark_present(
 @router.patch(
     "/{attendance_id}/mark-present", response_model=DataResponse[AttendanceResponse]
 )
-@require_permission("attendance.update")
+@require_permission("attendance:write")
 async def mark_present_by_id(
     service: AttendanceServiceDep,
     attendance_id: int,
@@ -372,13 +384,13 @@ async def mark_present_by_id(
     current_user: CurrentUser = Depends(get_current_user),
 ) -> DataResponse[AttendanceResponse]:
     """
-    Mark attendance sebagai present berdasarkan ID (untuk admin/super admin).
+    Mark attendance sebagai present berdasarkan ID.
 
     Use case: Super admin dan HRIS admin ingin mengubah status attendance karyawan tertentu.
 
     Restrictions:
     - User tidak dapat mengubah attendance mereka sendiri (bahkan jika super admin)
-    - Memerlukan permission 'attendance.update'
+    - Memerlukan permission 'attendance:write'
 
     Logic:
     - Update attendance yang sudah ada menjadi status 'present'
@@ -386,7 +398,7 @@ async def mark_present_by_id(
     - Hitung work_hours otomatis (8 jam standar)
     - Tambahkan keterangan otomatis: "Diubah oleh [nama admin] pada [tanggal waktu]"
 
-    **Permission required**: attendance.update
+    **Permission required**: attendance:write
     """
     current_employee_id = current_user.employee_id or current_user.id
 

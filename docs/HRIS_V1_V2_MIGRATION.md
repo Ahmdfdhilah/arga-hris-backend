@@ -19,10 +19,10 @@
 | Module | v1 | v2 | Status |
 |--------|----|----|--------|
 | Auth | ✅ | ✅ | **CHANGED** - Simplified |
-| Employees | ✅ | ✅ | **CHANGED** - Simplified |
+| Employees | ✅ | ✅ | **CHANGED** - Enhanced |
 | Attendances | ✅ | ✅ | **SAME** |
 | Leave Requests | ✅ | ✅ | **CHANGED** - Added replacement |
-| Org Units | ✅ | ✅ | **SAME** |
+| Org Units | ✅ | ✅ | **CHANGED** - Enhanced |
 | RBAC/Roles | ✅ | ✅ | **CHANGED** - Simplified |
 | Scheduled Jobs | ✅ | ✅ | **SAME** |
 | Dashboard | ✅ | ✅ | **SAME** |
@@ -58,28 +58,36 @@
 ### v1 Endpoints
 | Method | Endpoint | Status |
 |--------|----------|--------|
-| GET | `/employees/deleted` | ❌ Removed |
+| GET | `/employees/deleted` | ✅ Kept |
 | GET | `/employees/with-account` | ❌ Removed |
-| POST | `/employees/bulk-insert` | ❌ Removed |
+| POST | `/employees/bulk-insert` | ✅ Kept |
 | POST | `/{user_id}/activate` | ❌ Removed |
 | POST | `/{user_id}/deactivate` | ❌ Removed |
 | POST | `/{user_id}/sync-to-sso` | ❌ Removed |
-| DELETE | `/{user_id}` (soft delete) | ❌ Removed |
-| POST | `/{user_id}/restore` | ❌ Removed |
+| DELETE | `/{user_id}` (soft delete) | ✅ Kept |
+| POST | `/{user_id}/restore` | ✅ Kept |
 | GET | `/employees` | ✅ Kept |
 | GET | `/employees/{id}` | ✅ Kept |
-| POST | `/employees` | ❌ Removed (via SSO event) |
+| POST | `/employees` | ✅ Kept |
 | PUT | `/employees/{id}` | ✅ Changed to PATCH |
 
 ### v2 Endpoints
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/employees` | List employees (paginated) |
+| GET | `/employees/deleted` | List deleted employees |
 | GET | `/employees/{id}` | Get employee by ID |
 | PATCH | `/employees/{id}` | Update employee |
+| DELETE | `/employees/{id}` | Soft delete employee |
+| POST | `/employees/{id}/restore` | Restore deleted employee |
+| POST | `/employees` | Create employee (Admin only) |
+| POST | `/employees/bulk-insert` | Bulk create from Excel |
 | GET | `/employees/{id}/subordinates` | Get subordinates |
+| GET | `/employees/org-unit/{org_unit_id}` | List by org unit |
+| GET | `/employees/by-email/{email}` | Get by email |
+| GET | `/employees/by-code/{code}` | Get by code |
 
-> **Breaking Change**: Employee creation sekarang via SSO event (RabbitMQ). Tidak ada endpoint POST untuk create employee.
+> **Note**: Meskipun create employee bisa via SSO event (RabbitMQ), endpoint POST `/employees` tetap tersedia untuk Super Admin/HR Admin.
 
 ---
 
@@ -112,6 +120,7 @@
 | POST | `/leave-requests` | **CHANGED** - Added `replacement_employee_id` field |
 | GET | `/leave-requests` | **CHANGED** - Added `replacement_employee_name` in response |
 | GET | `/leave-requests/{id}` | **CHANGED** - Added `replacement` object in response |
+| GET | `/leave-requests/team/leave-requests` | **NEW** - Get team leave requests |
 
 ### New Request Field (Create)
 ```json
@@ -155,17 +164,23 @@
 
 ## 5. ORG UNITS MODULE
 
-### Status: **UNCHANGED** ✅
+### Status: **CHANGED** (Enhanced) ✅
 
 | Method | Endpoint | v1 | v2 |
 |--------|----------|----|----|
 | GET | `/org-units` | ✅ | ✅ |
+| GET | `/org-units/deleted` | ❌ | ✅ (New) |
 | GET | `/org-units/{id}` | ✅ | ✅ |
 | GET | `/org-units/by-code/{code}` | ✅ | ✅ |
-| GET | `/org-units/tree` | ✅ | ✅ |
+| GET | `/org-units/tree` (Check hierarchy endpoint) | ✅ | ✅ (Exposed via `{id}/hierarchy` or standard list with parent filter) |
 | POST | `/org-units` | ✅ | ✅ |
+| POST | `/org-units/bulk-insert` | ❌ | ✅ (New) |
 | PUT | `/org-units/{id}` | ✅ | ✅ |
 | DELETE | `/org-units/{id}` | ✅ | ✅ |
+| POST | `/org-units/{id}/restore` | ❌ | ✅ (New) |
+| GET | `/org-units/types/all` | ❌ | ✅ (New) |
+| GET | `/org-units/{id}/children` | ✅ | ✅ |
+| GET | `/org-units/{id}/hierarchy` | ✅ | ✅ |
 
 ---
 
@@ -181,6 +196,7 @@
 | POST | `/roles/{user_id}/assign` | ✅ Kept |
 | POST | `/roles/{user_id}/remove` | ✅ Kept |
 | POST | `/roles/bulk-assign` | ❌ Removed |
+| POST | `/roles/{user_id}/assign-multiple` | ✅ NEW |
 
 ---
 
@@ -303,20 +319,21 @@ pending → active → expired
 - [ ] `POST /auth/logout-all` → Use SSO
 - [ ] `POST /auth/validate-token` → Use SSO
 - [ ] `GET /auth/token-info` → Use SSO
-- [ ] `GET /employees/deleted` → Removed
 - [ ] `GET /employees/with-account` → Removed
-- [ ] `POST /employees` → Now via SSO events
+- [ ] `POST /{user_id}/activate` & `deactivate` → Removed
 - [ ] All `/work-submissions/*` → Module removed
 
 ### ✅ Update These API Calls
 - [ ] `PUT /employees/{id}` → Change to `PATCH /employees/{id}`
 - [ ] Leave request create → Add optional `replacement_employee_id`
 - [ ] Leave request responses → Handle new `replacement` object
+- [ ] Employee Management: Re-implement Create, Delete, Restore, Bulk Insert using accessible endpoints if Admin features are needed.
 
 ### ➕ Add New Features
 - [ ] Implement Assignment Management UI (`/assignments`)
 - [ ] Show replacement info in Leave Request detail
 - [ ] Validate assignment conflicts when creating leave
+- [ ] Add Org Unit Management: Bulk Insert, Restore, Types
 
 ---
 
@@ -356,4 +373,4 @@ pending → active → expired
 
 ---
 
-*Last Updated: 2025-12-19*
+*Last Updated: 2025-12-22*

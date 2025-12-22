@@ -44,6 +44,7 @@ ROLES = [
 ]
 
 # Default permissions (resource:action format)
+# Default permissions (resource:action format)
 PERMISSIONS = [
     # Users
     {
@@ -79,14 +80,32 @@ PERMISSIONS = [
     },
     {
         "code": "employees:delete",
-        "description": "Delete employees",
+        "description": "Delete employees (archive)",
         "resource": "employees",
         "action": "delete",
+    },
+    {
+        "code": "employees:view_deleted",
+        "description": "View deleted employees",
+        "resource": "employees",
+        "action": "view_deleted",
+    },
+    {
+        "code": "employees:restore",
+        "description": "Restore deleted employees",
+        "resource": "employees",
+        "action": "restore",
+    },
+    {
+        "code": "employees:export",
+        "description": "Export employee data",
+        "resource": "employees",
+        "action": "export",
     },
     # Attendance
     {
         "code": "attendance:read",
-        "description": "View attendance",
+        "description": "View own attendance",
         "resource": "attendance",
         "action": "read",
     },
@@ -98,15 +117,21 @@ PERMISSIONS = [
     },
     {
         "code": "attendance:write",
-        "description": "Create/update attendance",
+        "description": "Create/update attendance (check-in/out)",
         "resource": "attendance",
         "action": "write",
     },
     {
         "code": "attendance:approve",
-        "description": "Approve attendance",
+        "description": "Approve attendance corrections",
         "resource": "attendance",
         "action": "approve",
+    },
+    {
+        "code": "attendance:export",
+        "description": "Export attendance data",
+        "resource": "attendance",
+        "action": "export",
     },
     # Leave requests
     {
@@ -171,10 +196,22 @@ PERMISSIONS = [
         "resource": "org_units",
         "action": "write",
     },
+    {
+        "code": "org_units:view_deleted",
+        "description": "View deleted org units",
+        "resource": "org_units",
+        "action": "view_deleted",
+    },
+    {
+        "code": "org_units:restore",
+        "description": "Restore deleted org units",
+        "resource": "org_units",
+        "action": "restore",
+    },
     # Dashboard
     {
         "code": "dashboard:read",
-        "description": "View dashboard",
+        "description": "View dashboard (limited)",
         "resource": "dashboard",
         "action": "read",
     },
@@ -199,22 +236,29 @@ PERMISSIONS = [
     },
     # Employee Assignments
     {
-        "code": "assignment.create",
+        "code": "assignments:create",
         "description": "Create employee assignments",
-        "resource": "assignment",
+        "resource": "assignments",
         "action": "create",
     },
     {
-        "code": "assignment.read",
+        "code": "assignments:read",
         "description": "View employee assignments",
-        "resource": "assignment",
+        "resource": "assignments",
         "action": "read",
     },
     {
-        "code": "assignment.cancel",
+        "code": "assignments:cancel",
         "description": "Cancel employee assignments",
-        "resource": "assignment",
+        "resource": "assignments",
         "action": "cancel",
+    },
+    # Payroll
+    {
+        "code": "payroll:export",
+        "description": "Export payroll data",
+        "resource": "payroll",
+        "action": "export",
     },
 ]
 
@@ -224,23 +268,31 @@ ROLE_PERMISSIONS = {
     "hr_admin": [
         "users:read",
         "users:write",
+        "users:delete",
         "employees:read",
         "employees:write",
         "employees:delete",
+        "employees:view_deleted",
+        "employees:restore",
+        "employees:export",
         "attendance:read_all",
         "attendance:approve",
+        "attendance:export",
         "leave:read_all",
         "leave:approve",
         "work:read_all",
         "work:review",
         "org_units:read",
         "org_units:write",
+        "org_units:view_deleted",
+        "org_units:restore",
         "dashboard:read_all",
         "roles:read",
         "roles:write",
-        "assignment.create",
-        "assignment.read",
-        "assignment.cancel",
+        "assignments:create",
+        "assignments:read",
+        "assignments:cancel",
+        "payroll:export",
     ],
     "org_unit_head": [
         "employees:read",
@@ -255,7 +307,7 @@ ROLE_PERMISSIONS = {
         "work:review",
         "org_units:read",
         "dashboard:read",
-        "assignment.read",
+        "assignments:read",
     ],
     "employee": [
         "attendance:read",

@@ -27,7 +27,7 @@ router = APIRouter(prefix="/employees", tags=["Employees"])
 
 
 @router.get("", response_model=PaginatedResponse[EmployeeResponse])
-@require_permission("employee.read")
+@require_permission("employees:read")
 async def list_employees(
     service: EmployeeServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
@@ -48,7 +48,7 @@ async def list_employees(
 
 
 @router.get("/deleted", response_model=PaginatedResponse[EmployeeResponse])
-@require_permission("employee.view_deleted")
+@require_permission("employees:view_deleted")
 async def list_deleted_employees(
     service: EmployeeServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
@@ -69,7 +69,7 @@ async def list_deleted_employees(
 @router.get(
     "/org-unit/{org_unit_id}", response_model=PaginatedResponse[EmployeeResponse]
 )
-@require_permission("employee.read")
+@require_permission("employees:read")
 async def list_by_org_unit(
     org_unit_id: int,
     service: EmployeeServiceDep,
@@ -93,7 +93,7 @@ async def list_by_org_unit(
 @router.get(
     "/by-email/{email}", response_model=DataResponse[Optional[EmployeeResponse]]
 )
-@require_permission("employee.read")
+@require_permission("employees:read")
 async def get_by_email(
     email: str,
     service: EmployeeServiceDep,
@@ -108,7 +108,7 @@ async def get_by_email(
 @router.get(
     "/by-code/{code}", response_model=DataResponse[Optional[EmployeeResponse]]
 )
-@require_permission("employee.read")
+@require_permission("employees:read")
 async def get_by_code(
     code: str,
     service: EmployeeServiceDep,
@@ -121,7 +121,7 @@ async def get_by_code(
 
 
 @router.get("/{employee_id}", response_model=DataResponse[EmployeeResponse])
-@require_permission("employee.read")
+@require_permission("employees:read")
 async def get_employee(
     employee_id: int,
     service: EmployeeServiceDep,
@@ -134,7 +134,7 @@ async def get_employee(
 @router.get(
     "/{employee_id}/subordinates", response_model=PaginatedResponse[EmployeeResponse]
 )
-@require_permission("employee.read")
+@require_permission("employees:read")
 async def list_subordinates(
     employee_id: int,
     service: EmployeeServiceDep,
@@ -160,7 +160,7 @@ async def list_subordinates(
     response_model=DataResponse[EmployeeResponse],
     status_code=status.HTTP_201_CREATED,
 )
-@require_role(["super_admin", "hr_admin"])
+@require_permission("employees:write")
 async def create_employee(
     request: EmployeeCreateRequest,
     service: EmployeeServiceDep,
@@ -185,7 +185,7 @@ async def create_employee(
 
 
 @router.patch("/{employee_id}", response_model=DataResponse[EmployeeResponse])
-@require_role(["super_admin", "hr_admin"])
+@require_permission("employees:write")
 async def update_employee(
     employee_id: int,
     request: EmployeeUpdateRequest,
@@ -203,7 +203,7 @@ async def update_employee(
 
 
 @router.delete("/{employee_id}", response_model=DataResponse[Dict[str, Any]])
-@require_role(["super_admin", "hr_admin"])
+@require_permission("employees:delete")
 async def delete_employee(
     employee_id: int,
     service: EmployeeServiceDep,
@@ -214,7 +214,7 @@ async def delete_employee(
 
 
 @router.post("/{employee_id}/restore", response_model=DataResponse[EmployeeResponse])
-@require_permission("employee.restore")
+@require_permission("employees:restore")
 async def restore_employee(
     employee_id: int,
     service: EmployeeServiceDep,

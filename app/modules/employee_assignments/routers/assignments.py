@@ -29,7 +29,7 @@ router = APIRouter(prefix="/assignments", tags=["Employee Assignments"])
 
 
 @router.post("/", status_code=201, response_model=DataResponse[AssignmentResponse])
-@require_permission("assignment.create")
+@require_permission("assignments:create")
 async def create_assignment(
     request: AssignmentCreateRequest,
     service: AssignmentServiceDep,
@@ -38,7 +38,7 @@ async def create_assignment(
     """
     Membuat assignment penggantian sementara.
 
-    **Permission required**: assignment.create
+    **Permission required**: assignments:create
     """
     result = await service.create(request=request, created_by=current_user.id)
     return create_success_response(
@@ -48,7 +48,7 @@ async def create_assignment(
 
 
 @router.get("/", response_model=PaginatedResponse[AssignmentListItemResponse])
-@require_permission("assignment.read")
+@require_permission("assignments:read")
 async def list_assignments(
     service: AssignmentServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
@@ -74,7 +74,7 @@ async def list_assignments(
     """
     Daftar semua assignment dengan filters.
 
-    **Permission required**: assignment.read
+    **Permission required**: assignments:read
     """
     items, total_items = await service.list(
         status=status,
@@ -97,7 +97,7 @@ async def list_assignments(
 
 
 @router.get("/{assignment_id}", response_model=DataResponse[AssignmentResponse])
-@require_permission("assignment.read")
+@require_permission("assignments:read")
 async def get_assignment(
     assignment_id: int,
     service: AssignmentServiceDep,
@@ -106,7 +106,7 @@ async def get_assignment(
     """
     Ambil detail assignment berdasarkan ID.
 
-    **Permission required**: assignment.read
+    **Permission required**: assignments:read
     """
     result = await service.get_by_id(assignment_id)
     return create_success_response(
@@ -116,7 +116,7 @@ async def get_assignment(
 
 
 @router.post("/{assignment_id}/cancel", response_model=DataResponse[AssignmentResponse])
-@require_permission("assignment.cancel")
+@require_permission("assignments:cancel")
 async def cancel_assignment(
     assignment_id: int,
     service: AssignmentServiceDep,
@@ -126,7 +126,7 @@ async def cancel_assignment(
     """
     Batalkan assignment yang masih pending atau active.
 
-    **Permission required**: assignment.cancel
+    **Permission required**: assignments:cancel
     """
     result = await service.cancel(
         assignment_id=assignment_id,
