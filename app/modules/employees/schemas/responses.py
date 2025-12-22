@@ -38,7 +38,8 @@ class EmployeeSupervisorNestedResponse(BaseModel):
     """Nested supervisor"""
 
     id: int
-    number: str
+    code: str
+    name: Optional[str] = None
     position: Optional[str] = None
     user: Optional[UserNestedResponse] = None
 
@@ -51,9 +52,12 @@ class EmployeeResponse(BaseModel):
 
     id: int
     user_id: Optional[str] = None
-    number: str
+    code: str
+    name: Optional[str] = None  # Denormalized from user
+    email: Optional[str] = None  # Denormalized from user
     position: Optional[str] = None
-    type: Optional[str] = None
+    site: Optional[str] = None  # on_site, hybrid, ho
+    type: Optional[str] = None  # fulltime, contract, intern
     org_unit_id: Optional[int] = None
     supervisor_id: Optional[int] = None
     is_active: bool = True

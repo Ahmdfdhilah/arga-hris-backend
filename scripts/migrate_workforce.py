@@ -277,9 +277,11 @@ def create_hris_employees(
         if not sso_user_id:
             continue
 
-        number = emp.get("employee_number")
+        code = emp.get("employee_number")  # Map employee_number to code
+        name = emp.get("employee_name")    # Denormalized name
+        email = old_email                   # Denormalized email
         position = emp.get("employee_position")
-        emp_type = emp.get("employee_type")
+        emp_type = emp.get("employee_type")  # Now this is employment type (fulltime/contract/intern)
         old_org_unit_id = emp.get("employee_org_unit_id")
         is_active = emp.get("is_active", "t") == "t"
 
@@ -288,7 +290,7 @@ def create_hris_employees(
             org_unit_id = org_unit_mapping.get(int(old_org_unit_id))
 
         result = session.execute(
-            text("SELECT id FROM employees WHERE number = :number"), {"number": number}
+            text("SELECT id FROM employees WHERE code = :code"), {"code": code}
         ).fetchone()
 
         if result:
@@ -297,12 +299,14 @@ def create_hris_employees(
 
         session.execute(
             text("""
-                INSERT INTO employees (user_id, number, position, type, org_unit_id, is_active, created_by, created_at, updated_at)
-                VALUES (:user_id, :number, :position, :type, :org_unit_id, :is_active, :created_by, NOW(), NOW())
+                INSERT INTO employees (user_id, name, email, code, position, type, org_unit_id, is_active, created_by, created_at, updated_at)
+                VALUES (:user_id, :name, :email, :code, :position, :type, :org_unit_id, :is_active, :created_by, NOW(), NOW())
             """),
             {
                 "user_id": sso_user_id,
-                "number": number,
+                "name": name,
+                "email": email,
+                "code": code,
                 "position": position,
                 "type": emp_type,
                 "org_unit_id": org_unit_id,
@@ -312,7 +316,7 @@ def create_hris_employees(
         )
 
         result = session.execute(
-            text("SELECT id FROM employees WHERE number = :number"), {"number": number}
+            text("SELECT id FROM employees WHERE code = :code"), {"code": code}
         ).fetchone()
 
         id_mapping[old_id] = result[0]

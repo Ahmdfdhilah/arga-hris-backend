@@ -110,8 +110,15 @@ def upgrade() -> None:
         "employees",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("user_id", sa.String(36), nullable=True),
-        sa.Column("number", sa.String(50), nullable=False),
+        # Denormalized fields from User for search/display
+        sa.Column("name", sa.String(200), nullable=True),
+        sa.Column("email", sa.String(255), nullable=True),
+        # Employee identification (formerly 'number')
+        sa.Column("code", sa.String(50), nullable=False),
         sa.Column("position", sa.String(255), nullable=True),
+        # Work location: on_site, hybrid, ho (formerly 'type')
+        sa.Column("site", sa.String(20), nullable=True),
+        # Employment type: fulltime, contract, intern
         sa.Column("type", sa.String(20), nullable=True),
         sa.Column("org_unit_id", sa.Integer(), nullable=True),
         sa.Column("supervisor_id", sa.Integer(), nullable=True),
@@ -140,19 +147,31 @@ def upgrade() -> None:
             ["supervisor_id"], ["employees.id"], ondelete="SET NULL"
         ),
         sa.CheckConstraint(
-            "type IN ('on_site', 'hybrid', 'ho') OR type IS NULL",
+            "site IN ('on_site', 'hybrid', 'ho') OR site IS NULL",
+            name="ck_employees_site",
+        ),
+        sa.CheckConstraint(
+            "type IN ('fulltime', 'contract', 'intern') OR type IS NULL",
             name="ck_employees_type",
         ),
     )
     op.create_index("ix_employees_id", "employees", ["id"])
-    op.create_index("ix_employees_number", "employees", ["number"], unique=True)
+    op.create_index("ix_employees_code", "employees", ["code"], unique=True)
     op.create_index("ix_employees_user_id", "employees", ["user_id"], unique=True)
+    op.create_index("ix_employees_name", "employees", ["name"])
+    op.create_index("ix_employees_email", "employees", ["email"])
     op.create_index("ix_employees_org_unit_id", "employees", ["org_unit_id"])
     op.create_index("ix_employees_supervisor_id", "employees", ["supervisor_id"])
     op.create_index("ix_employees_is_active", "employees", ["is_active"])
     op.create_index("ix_employees_deleted_at", "employees", ["deleted_at"])
     op.create_index(
-        "ix_employees_number_search", "employees", ["number"], postgresql_using="btree"
+        "ix_employees_code_search", "employees", ["code"], postgresql_using="btree"
+    )
+    op.create_index(
+        "ix_employees_name_search", "employees", ["name"], postgresql_using="btree"
+    )
+    op.create_index(
+        "ix_employees_email_search", "employees", ["email"], postgresql_using="btree"
     )
 
     # Add head_id FK to org_units (deferred)

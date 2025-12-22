@@ -106,15 +106,15 @@ async def get_by_email(
 
 
 @router.get(
-    "/by-number/{number}", response_model=DataResponse[Optional[EmployeeResponse]]
+    "/by-code/{code}", response_model=DataResponse[Optional[EmployeeResponse]]
 )
 @require_permission("employee.read")
-async def get_by_number(
-    number: str,
+async def get_by_code(
+    code: str,
     service: EmployeeServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
 ) -> DataResponse[Optional[EmployeeResponse]]:
-    data = await service.get_by_number(number)
+    data = await service.get_by_code(code)
     return create_success_response(
         message="Success" if data else "Not found", data=data
     )
@@ -167,7 +167,7 @@ async def create_employee(
     current_user: CurrentUser = Depends(get_current_user),
 ) -> DataResponse[EmployeeResponse]:
     data = await service.create(
-        number=request.number,
+        code=request.code,
         first_name=request.first_name,
         last_name=request.last_name,
         email=request.email,
@@ -175,6 +175,7 @@ async def create_employee(
         org_unit_id=request.org_unit_id,
         phone=request.phone,
         position=request.position,
+        site=request.site,
         employee_type=request.type,
         gender=request.gender,
         supervisor_id=request.supervisor_id,
@@ -183,7 +184,7 @@ async def create_employee(
     return create_success_response(message="Created", data=data)
 
 
-@router.put("/{employee_id}", response_model=DataResponse[EmployeeResponse])
+@router.patch("/{employee_id}", response_model=DataResponse[EmployeeResponse])
 @require_role(["super_admin", "hr_admin"])
 async def update_employee(
     employee_id: int,
@@ -275,7 +276,7 @@ async def bulk_insert_employees(
             validation_errors.append(
                 {
                     "row_number": item_data.get("row_number", "?"),
-                    "number": item_data.get("number", "?"),
+                    "code": item_data.get("code", "?"),
                     "error": str(e),
                 }
             )
@@ -293,10 +294,6 @@ async def bulk_insert_employees(
             ),
         )
 
-    # Note: Bulk Insert is tricky with atomic Use Case execution.
-    # We might need to call create loop here or add bulk_create to Service.
-    # For now, looping service.create is fine as per Service Logic.
-
     success_count = 0
     error_count = 0
     created_ids = []
@@ -305,18 +302,8 @@ async def bulk_insert_employees(
 
     for item in bulk_items:
         try:
-            # Service.create returns EmployeeResponse, we need to extract ID.
-            # Warning: Service.create does not return warnings anymore (Tuple[Employee, str]).
-            # It returns EmployeeResponse.
-            # We need to adapt Bulk Insert logic or update service/usecase to support return warnings.
-            # Looking at CreateEmployeeUseCase, it returns (Employee, str).
-            # Looking at EmployeeService.create, it returns EmployeeResponse. WARNING LOST.
-
-            # Since User explicitly asked for single use case, Bulk Insert might need its own Use Case or loop here.
-            # For now, I will assume NO WARNINGS from Service.create.
-
             result = await service.create(
-                number=item.number,
+                code=item.code,
                 first_name=item.first_name,
                 last_name=item.last_name,
                 email=item.email,
@@ -324,6 +311,7 @@ async def bulk_insert_employees(
                 org_unit_id=item.org_unit_id,
                 phone=item.phone,
                 position=item.position,
+                site=item.site,
                 employee_type=item.type,
                 gender=item.gender,
             )
@@ -333,7 +321,7 @@ async def bulk_insert_employees(
         except Exception as e:
             error_count += 1
             if skip_errors:
-                errors.append({"number": item.number, "error": str(e)})
+                errors.append({"code": item.code, "error": str(e)})
             else:
                 raise
 

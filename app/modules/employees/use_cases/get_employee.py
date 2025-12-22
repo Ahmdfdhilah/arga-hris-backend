@@ -17,14 +17,14 @@ class GetEmployeeUseCase:
         return employee
 
 
-class GetEmployeeByNumberUseCase:
-    """Use Case for retrieving an employee by number."""
+class GetEmployeeByCodeUseCase:
+    """Use Case for retrieving an employee by code."""
 
     def __init__(self, queries: EmployeeQueries):
         self.queries = queries
 
-    async def execute(self, number: str) -> Optional[Employee]:
-        return await self.queries.get_by_number(number)
+    async def execute(self, code: str) -> Optional[Employee]:
+        return await self.queries.get_by_code(code)
 
 
 class GetEmployeeByEmailUseCase:

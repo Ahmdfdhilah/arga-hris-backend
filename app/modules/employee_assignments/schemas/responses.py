@@ -12,7 +12,7 @@ class EmployeeNestedResponse(BaseModel):
     """Employee ringkas untuk nested response"""
 
     id: int
-    number: str
+    code: str
     name: Optional[str] = None
     position: Optional[str] = None
 
@@ -22,12 +22,12 @@ class EmployeeNestedResponse(BaseModel):
     @classmethod
     def from_employee(cls, employee) -> "EmployeeNestedResponse":
         """Create dari Employee model dengan user relationship."""
-        name = None
-        if employee and hasattr(employee, "user") and employee.user:
+        name = employee.name  # Use denormalized name first
+        if not name and employee and hasattr(employee, "user") and employee.user:
             name = employee.user.name
         return cls(
             id=employee.id,
-            number=employee.number,
+            code=employee.code,
             name=name,
             position=employee.position,
         )

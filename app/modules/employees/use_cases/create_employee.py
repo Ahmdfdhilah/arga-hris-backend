@@ -40,7 +40,7 @@ class CreateEmployeeUseCase:
 
     async def execute(
         self,
-        number: str,
+        code: str,
         first_name: str,
         last_name: str,
         email: str,
@@ -48,6 +48,7 @@ class CreateEmployeeUseCase:
         org_unit_id: Optional[int] = None,
         phone: Optional[str] = None,
         position: Optional[str] = None,
+        site: Optional[str] = None,
         employee_type: Optional[str] = None,
         gender: Optional[str] = None,
         supervisor_id: Optional[int] = None,
@@ -56,10 +57,10 @@ class CreateEmployeeUseCase:
         Execute the create employee use case.
         Returns Tuple[Employee, warning_message]
         """
-        # Check if number exists
-        existing_number = await self.queries.get_by_number(number)
-        if existing_number:
-            raise ConflictException(f"Employee number '{number}' already exists")
+        # Check if code exists
+        existing_code = await self.queries.get_by_code(code)
+        if existing_code:
+            raise ConflictException(f"Employee code '{code}' already exists")
 
         # 1. Create/Sync SSO User
         local_user = await SSOSyncUtil.create_sso_user(
@@ -82,11 +83,15 @@ class CreateEmployeeUseCase:
                 exclude_employee_id=None,
             )
 
-        # 3. Create Employee
+        # 3. Create Employee with denormalized name/email
+        full_name = f"{first_name} {last_name}".strip()
         employee = Employee(
             user_id=local_user.id,
-            number=number,
+            name=full_name,
+            email=email,
+            code=code,
             position=position,
+            site=site,
             type=employee_type,
             org_unit_id=org_unit_id,
             supervisor_id=final_supervisor_id,

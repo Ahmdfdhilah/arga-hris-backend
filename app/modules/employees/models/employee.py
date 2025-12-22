@@ -2,8 +2,8 @@
 Employee Model - Employment data
 
 Represents employee employment information with organizational relationships.
-Profile data (name, email, phone, gender) is stored in User table.
-This table focuses on employment-specific data.
+Profile data is denormalized (name, email) for search/display performance.
+Full user data is stored in User table and synced from SSO.
 """
 
 from sqlalchemy import String, Integer, Boolean, ForeignKey, Index, CheckConstraint
@@ -35,16 +35,23 @@ class Employee(Base, TimestampMixin):
         index=True,
     )
 
+    # Denormalized fields from User for search/display performance
+    name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True, index=True)
+    email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+
     # Employee identification
-    number: Mapped[str] = mapped_column(
+    code: Mapped[str] = mapped_column(
         String(50), unique=True, nullable=False, index=True
     )
 
     # Employment data
     position: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    type: Mapped[Optional[str]] = mapped_column(
-        String(20), nullable=True
-    )  # on_site, hybrid, ho
+    
+    # Work location type: on_site, hybrid, ho
+    site: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    
+    # Employment type: fulltime, contract, intern
+    type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
     # Organization structure
     org_unit_id: Mapped[Optional[int]] = mapped_column(
@@ -96,10 +103,16 @@ class Employee(Base, TimestampMixin):
     # Constraints
     __table_args__ = (
         CheckConstraint(
-            "type IN ('on_site', 'hybrid', 'ho') OR type IS NULL",
+            "site IN ('on_site', 'hybrid', 'ho') OR site IS NULL",
+            name="ck_employees_site",
+        ),
+        CheckConstraint(
+            "type IN ('fulltime', 'contract', 'intern') OR type IS NULL",
             name="ck_employees_type",
         ),
-        Index("ix_employees_number_search", "number", postgresql_using="btree"),
+        Index("ix_employees_code_search", "code", postgresql_using="btree"),
+        Index("ix_employees_name_search", "name", postgresql_using="btree"),
+        Index("ix_employees_email_search", "email", postgresql_using="btree"),
     )
 
     def is_deleted(self) -> bool:
@@ -119,4 +132,4 @@ class Employee(Base, TimestampMixin):
         self.deleted_by = user_id
 
     def __repr__(self) -> str:
-        return f"<Employee(id={self.id}, number={self.number})>"
+        return f"<Employee(id={self.id}, code={self.code})>"

@@ -122,7 +122,7 @@ class UpdateOrgUnitUseCase:
                 await self.commands.update(org_unit)
 
                 # Update all descendants
-                children = await self.queries.get_children(
+                children, _ = await self.queries.get_children(
                     org_unit.id, recursive=True, skip=0, limit=1000
                 )
                 for child in children:
@@ -157,7 +157,7 @@ class UpdateOrgUnitUseCase:
             )
 
         # 2. Update Direct Members of this Unit
-        members = await self.employee_queries.list(org_unit_id=org_unit_id, limit=1000)
+        members, _ = await self.employee_queries.list(org_unit_id=org_unit_id, limit=1000)
         logger.info(
             f"Updating {len(members)} members for OrgUnit {org_unit_id}. Effective Sup: {effective_supervisor_id}"
         )
@@ -165,12 +165,10 @@ class UpdateOrgUnitUseCase:
         for emp in members:
             target_sup = effective_supervisor_id
 
-            # If the resolved supervisor is the employee themselves, look up further
             if target_sup == emp.id:
                 logger.info(
                     f"Employee {emp.id} is the generic supervisor. Re-resolving excluding self."
                 )
-                # Re-resolve excluding self
                 target_sup = await self._resolve_supervisor_for_unit(
                     org_unit_id, exclude_employee_id=emp.id
                 )
@@ -185,10 +183,8 @@ class UpdateOrgUnitUseCase:
                 await self.employee_commands.update(emp)
 
         # 3. Propagate to child units
-        children = await self.queries.get_children(org_unit_id, recursive=False)
+        children, _ = await self.queries.get_children(org_unit_id, recursive=False)
         for child in children:
-            # Only propagate if child unit does NOT have its own head
-            # If it has a head, that head blocks inheritance (it's a new supervisor node)
             if not child.head_id:
                 await self._handle_head_change(child.id, None, None, updated_by)
 

@@ -159,6 +159,45 @@ class EmployeeService:
     *   **No Logic**: Dilarang ada logic `if/else` bisnis di sini.
     *   Return hasil dari Service langsung.
 
+**Router Declaration Format (WAJIB KONSISTEN)**:
+
+```python
+# Format WAJIB untuk setiap router file
+router = APIRouter(prefix="/module-name", tags=["Module Display Name"])
+```
+
+**Contoh yang benar**:
+
+| Module | Declaration |
+|--------|-------------|
+| auth | `APIRouter(prefix="/auth", tags=["Authentication"])` |
+| employees | `APIRouter(prefix="/employees", tags=["Employees"])` |
+| attendances | `APIRouter(prefix="/attendances", tags=["Attendances"])` |
+| leave-requests | `APIRouter(prefix="/leave-requests", tags=["Leave Requests"])` |
+| org-units | `APIRouter(prefix="/org-units", tags=["Organization Units"])` |
+| assignments | `APIRouter(prefix="/assignments", tags=["Employee Assignments"])` |
+
+**Centralized Router Registration** (`app/core/routers/routers.py`):
+
+```python
+def setup_routers(app: FastAPI) -> None:
+    app.include_router(system_router, tags=["System"])
+    
+    routers = [
+        auth.router,
+        employees.router,
+        # ... other routers
+    ]
+    
+    for router in routers:
+        app.include_router(router, prefix=settings.API_PREFIX)
+```
+
+**Rules**:
+1. Setiap router WAJIB declare `prefix` dan `tags` di file router masing-masing
+2. Centralized registration HANYA menambahkan API prefix (`/api/v1`)
+3. Tags di router file akan otomatis muncul di Swagger docs
+
 ---
 
 ## 3. SCHEMAS (DTOs)

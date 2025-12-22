@@ -32,9 +32,17 @@ class Settings(BaseSettings):
         default="app/credentials/gcp/your-gcp-credentials.json"
     )
     GCP_BUCKET_NAME: str = Field(default="sahabat-arga-bucket")
+    GCP_SSO_BUCKET_NAME: str = Field(
+        default="sahabat-arga-sso-bucket",
+        description="Bucket SSO untuk signed URLs cross-service (user avatars)"
+    )
 
     JWT_PUBLIC_KEY_PATH: str = Field(default="./jwt_public.pem")
     JWT_ALGORITHM: str = Field(default="RS256")
+    JWKS_CACHE_TTL_SECONDS: int = Field(
+        default=3600,
+        description="TTL for JWKS cache in seconds (default: 1 hour)"
+    )
 
     # SSO Service for user sync
     SSO_SERVICE_URL: str = Field(default="http://localhost:8001")

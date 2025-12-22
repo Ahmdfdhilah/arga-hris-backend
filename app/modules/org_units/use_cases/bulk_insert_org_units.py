@@ -19,7 +19,6 @@ class BulkInsertOrgUnitsUseCase:
         self.commands = commands
         self.employee_queries = employee_queries
         self.event_publisher = event_publisher
-        # We reuse CreateUseCase for individual items
         self.create_uc = CreateOrgUnitUseCase(
             queries, commands, employee_queries, event_publisher
         )
@@ -39,7 +38,6 @@ class BulkInsertOrgUnitsUseCase:
         code_to_id_map = {}
         email_to_employee_map = {}
 
-        # Resolve head emails to employee IDs
         if self.employee_queries:
             for item in items:
                 if item.head_email and item.head_email not in email_to_employee_map:
@@ -52,12 +50,9 @@ class BulkInsertOrgUnitsUseCase:
                     except Exception:
                         pass
 
-        # Phase 1: Insert root units
         root_items = [item for item in items if not item.parent_code]
         for item in root_items:
             try:
-                # Existing Check done safely inside logic or repeat here?
-                # CreateUC checks conflict, but let's check here to add to error report correctly
                 existing = await self.queries.get_by_code(item.code)
                 if existing:
                     result.error_count += 1
@@ -98,18 +93,14 @@ class BulkInsertOrgUnitsUseCase:
                     {"row_number": item.row_number, "code": item.code, "error": str(e)}
                 )
                 if not skip_errors:
-                    break  # Should we break total loop?
-                    # Original logic says "break" meaning abort batch.
-
-        # If strict error handling and we failed, return early?
+                    break 
+                
         if not skip_errors and result.error_count > 0:
             return result
-
-        # Phase 2: Insert child units
+        
         child_items = [item for item in items if item.parent_code]
 
         max_retries = 3
-        # Simple topological sort implementation via retries
         for retry in range(max_retries):
             remaining_items = []
 
@@ -180,7 +171,6 @@ class BulkInsertOrgUnitsUseCase:
                         }
                     )
                     if not skip_errors:
-                        # If error, break inner loop, will break outer
                         break
 
             if not skip_errors and result.error_count > 0:

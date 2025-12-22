@@ -1,7 +1,7 @@
 """Authorization and permission checking for HRIS Service.
 
 Hybrid approach:
-- Local JWT validation with public key (fast, no network)
+- Local JWT validation with public key from JWKS (fast, cached)
 - gRPC to SSO only for JIT provisioning (first-time user)
 """
 
@@ -14,24 +14,20 @@ from app.config.settings import settings
 from app.core.schemas import CurrentUser
 from app.core.exceptions import UnauthorizedException
 from app.core.utils.logging import get_logger
+from app.core.security.jwks_client import get_jwks_client
 
 logger = get_logger(__name__)
 
-_public_key: Optional[str] = None
 
-
-def _load_public_key() -> str:
-    global _public_key
-    if _public_key is None:
-        with open(settings.JWT_PUBLIC_KEY_PATH, "r") as f:
-            _public_key = f.read()
-    return _public_key
+def _get_public_key() -> str:
+    """Get public key from JWKS client (cached, with fallback)."""
+    return get_jwks_client().get_public_key()
 
 
 def _verify_token_locally(token: str) -> dict:
     try:
         payload = jwt.decode(
-            token, _load_public_key(), algorithms=[settings.JWT_ALGORITHM]
+            token, _get_public_key(), algorithms=[settings.JWT_ALGORITHM]
         )
         if payload.get("type") != "access":
             raise UnauthorizedException("Invalid token type")

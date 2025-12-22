@@ -50,40 +50,79 @@ class UpdateEmployeeUseCase:
     ) -> Employee:
         """
         Execute the update employee use case.
+        
+        - first_name/last_name: Updates denormalized name on Employee only (NOT synced to SSO)
+        - email/phone: Synced to SSO
+        - Sending null/None explicitly clears optional fields
         """
         employee = await self.queries.get_by_id(employee_id)
         if not employee:
             raise NotFoundException(f"Employee with ID {employee_id} not found")
 
-        # 0. Check Number Uniqueness
-        if "number" in update_data:
-            number = update_data["number"]
-            if number and number != employee.number:
-                existing_number = await self.queries.get_by_number(number)
-                if existing_number:
+        # 0. Check Code Uniqueness
+        if "code" in update_data:
+            code = update_data["code"]
+            if code is None:
+                raise BadRequestException("Employee code cannot be null")
+            if code and code != employee.code:
+                existing_code = await self.queries.get_by_code(code)
+                if existing_code:
                     raise ConflictException(
-                        f"Employee number '{number}' already exists"
+                        f"Employee code '{code}' already exists"
                     )
-                employee.number = number
+                employee.code = code
 
         if not employee.user_id:
-            # Should rarely happen for valid employees
             raise BadRequestException("Employee has no linked user")
 
-        # 1. Update SSO and Local User details
-        await SSOSyncUtil.update_sso_user(
-            sso_client=self.sso_client,
-            user_queries=self.user_queries,
-            user_commands=self.user_commands,
-            user_id=employee.user_id,
-            update_data=update_data,
-        )
+        # 1. Update SSO and Local User details (only email/phone)
+        sso_update_data = {}
+        if "email" in update_data:
+            sso_update_data["email"] = update_data["email"]
+        if "phone" in update_data:
+            sso_update_data["phone"] = update_data["phone"]
 
-        # 2. Update Employee Fields
+        if sso_update_data:
+            await SSOSyncUtil.update_sso_user(
+                sso_client=self.sso_client,
+                user_queries=self.user_queries,
+                user_commands=self.user_commands,
+                user_id=employee.user_id,
+                update_data=sso_update_data,
+            )
+
+        # Update denormalized email on Employee if changed
+        if "email" in update_data:
+            employee.email = update_data["email"]  # Can be None to clear
+
+        # 2. Update denormalized name from first_name/last_name (Employee only, NOT SSO)
+        if "first_name" in update_data or "last_name" in update_data:
+            first_name = update_data.get("first_name")
+            last_name = update_data.get("last_name")
+            
+            # Build new name from provided parts or existing
+            current_name_parts = (employee.name or "").split(" ", 1)
+            current_first = current_name_parts[0] if current_name_parts else ""
+            current_last = current_name_parts[1] if len(current_name_parts) > 1 else ""
+            
+            # Use provided value or keep existing (None means clear)
+            new_first = first_name if "first_name" in update_data else current_first
+            new_last = last_name if "last_name" in update_data else current_last
+            
+            # Handle explicit null - clears the part
+            new_first = "" if new_first is None else new_first
+            new_last = "" if new_last is None else new_last
+            
+            new_name = f"{new_first} {new_last}".strip()
+            employee.name = new_name if new_name else None
+
+        # 3. Update Employee-only Fields (handle null for clearing)
         if "position" in update_data:
-            employee.position = update_data["position"]
+            employee.position = update_data["position"]  # None clears
+        if "site" in update_data:
+            employee.site = update_data["site"]  # None clears
         if "type" in update_data:
-            employee.type = update_data["type"]
+            employee.type = update_data["type"]  # None clears
 
         # Handle Supervisor & Org Change Logic
         org_unit_changed = (
@@ -92,14 +131,14 @@ class UpdateEmployeeUseCase:
         )
 
         if "org_unit_id" in update_data:
-            employee.org_unit_id = update_data["org_unit_id"]
+            employee.org_unit_id = update_data["org_unit_id"]  # None clears
 
         # If supervisor explicitly provided, use it.
         if "supervisor_id" in update_data:
             sid = update_data["supervisor_id"]
             if sid is not None and sid == employee_id:
                 raise BadRequestException("Employee cannot be their own supervisor")
-            employee.supervisor_id = sid
+            employee.supervisor_id = sid  # None clears
         elif org_unit_changed and employee.org_unit_id:
             # Org changed, but supervisor not explicitly set -> Auto-resolve
             new_supervisor = await SupervisorAssignmentUtil.resolve_supervisor(

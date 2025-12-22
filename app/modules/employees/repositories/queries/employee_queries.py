@@ -8,7 +8,6 @@ from sqlalchemy import select, func, or_, and_, text
 from sqlalchemy.orm import selectinload
 
 from app.modules.employees.models.employee import Employee
-from app.modules.users.users.models.user import User
 
 
 class EmployeeQueries:
@@ -48,20 +47,21 @@ class EmployeeQueries:
         )
         return result.scalar_one_or_none()
 
-    async def get_by_number(self, number: str) -> Optional[Employee]:
+    async def get_by_code(self, code: str) -> Optional[Employee]:
+        """Get employee by code (formerly number)"""
         result = await self.db.execute(
             select(Employee)
             .options(*self._base_options())
-            .where(and_(Employee.number == number, Employee.deleted_at.is_(None)))
+            .where(and_(Employee.code == code, Employee.deleted_at.is_(None)))
         )
         return result.scalar_one_or_none()
 
     async def get_by_email(self, email: str) -> Optional[Employee]:
+        """Get employee by email (uses denormalized email field)"""
         result = await self.db.execute(
             select(Employee)
-            .join(User, Employee.user_id == User.id)
             .options(*self._base_options())
-            .where(and_(User.email == email, Employee.deleted_at.is_(None)))
+            .where(and_(Employee.email == email, Employee.deleted_at.is_(None)))
         )
         return result.scalar_one_or_none()
 
@@ -75,11 +75,12 @@ class EmployeeQueries:
 
         if search:
             pattern = f"%{search}%"
-            query = query.outerjoin(User, Employee.user_id == User.id).where(
+            # Use denormalized fields for search
+            query = query.where(
                 or_(
-                    User.name.ilike(pattern),
-                    User.email.ilike(pattern),
-                    Employee.number.ilike(pattern),
+                    Employee.name.ilike(pattern),
+                    Employee.email.ilike(pattern),
+                    Employee.code.ilike(pattern),
                 )
             )
 
@@ -190,12 +191,13 @@ class EmployeeQueries:
             query = query.where(Employee.is_active == is_active)
 
         if search:
-            # Join with User to search by name/email
-            query = query.join(Employee.user).where(
+            # Use denormalized fields for search (no User join needed)
+            pattern = f"%{search}%"
+            query = query.where(
                 or_(
-                    Employee.number.ilike(f"%{search}%"),
-                    User.name.ilike(f"%{search}%"),
-                    User.email.ilike(f"%{search}%"),
+                    Employee.code.ilike(pattern),
+                    Employee.name.ilike(pattern),
+                    Employee.email.ilike(pattern),
                 )
             )
 

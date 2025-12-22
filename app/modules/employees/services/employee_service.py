@@ -19,7 +19,7 @@ from app.modules.employees.use_cases.delete_employee import DeleteEmployeeUseCas
 from app.modules.employees.use_cases.restore_employee import RestoreEmployeeUseCase
 from app.modules.employees.use_cases.get_employee import (
     GetEmployeeUseCase,
-    GetEmployeeByNumberUseCase,
+    GetEmployeeByCodeUseCase,
     GetEmployeeByEmailUseCase,
 )
 from app.modules.employees.use_cases.list_employees import (
@@ -83,10 +83,10 @@ class EmployeeService:
             event_publisher,
         )
         self.restore_uc = RestoreEmployeeUseCase(
-            queries, commands, user_commands, event_publisher
+            queries, commands, user_commands, self.sso_client, event_publisher
         )
         self.get_uc = GetEmployeeUseCase(queries)
-        self.get_by_number_uc = GetEmployeeByNumberUseCase(queries)
+        self.get_by_code_uc = GetEmployeeByCodeUseCase(queries)
         self.get_by_email_uc = GetEmployeeByEmailUseCase(queries)
         self.list_uc = ListEmployeesUseCase(queries)
         self.list_deleted_uc = ListDeletedEmployeesUseCase(queries)
@@ -97,7 +97,7 @@ class EmployeeService:
 
     async def create(
         self,
-        number: str,
+        code: str,
         first_name: str,
         last_name: str,
         email: str,
@@ -105,12 +105,13 @@ class EmployeeService:
         org_unit_id: Optional[int] = None,
         phone: Optional[str] = None,
         position: Optional[str] = None,
+        site: Optional[str] = None,
         employee_type: Optional[str] = None,
         gender: Optional[str] = None,
         supervisor_id: Optional[int] = None,
     ) -> EmployeeResponse:
         employee, warning = await self.create_uc.execute(
-            number=number,
+            code=code,
             first_name=first_name,
             last_name=last_name,
             email=email,
@@ -118,6 +119,7 @@ class EmployeeService:
             org_unit_id=org_unit_id,
             phone=phone,
             position=position,
+            site=site,
             employee_type=employee_type,
             gender=gender,
             supervisor_id=supervisor_id,
@@ -146,8 +148,8 @@ class EmployeeService:
         employee = await self.get_uc.execute(employee_id)
         return EmployeeResponse.model_validate(employee)
 
-    async def get_by_number(self, number: str) -> Optional[EmployeeResponse]:
-        employee = await self.get_by_number_uc.execute(number)
+    async def get_by_code(self, code: str) -> Optional[EmployeeResponse]:
+        employee = await self.get_by_code_uc.execute(code)
         return EmployeeResponse.model_validate(employee) if employee else None
 
     async def get_by_email(self, email: str) -> Optional[EmployeeResponse]:

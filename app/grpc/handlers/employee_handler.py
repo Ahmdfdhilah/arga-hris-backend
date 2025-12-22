@@ -78,17 +78,17 @@ class EmployeeHandler(employee_pb2_grpc.EmployeeServiceServicer):
         request: employee_pb2.GetEmployeeByNumberRequest,
         context: grpc.aio.ServicerContext,
     ) -> employee_pb2.Employee:
-        """Get employee by number."""
+        """Get employee by number (code)."""
         logger.info(f"gRPC GetEmployeeByNumber called: {request.employee_number}")
 
         try:
             service, session = await self._get_service()
             async with session:
-                employee = await service.get_by_number(request.employee_number)
+                employee = await service.get_by_code(request.employee_number)
                 if not employee:
                     await context.abort(
                         grpc.StatusCode.NOT_FOUND,
-                        f"Employee dengan nomor {request.employee_number} tidak ditemukan",
+                        f"Employee dengan kode {request.employee_number} tidak ditemukan",
                     )
 
                 return employee_to_proto(employee)
@@ -192,7 +192,7 @@ class EmployeeHandler(employee_pb2_grpc.EmployeeServiceServicer):
                 last_name = name_parts[1] if len(name_parts) > 1 else ""
 
                 employee = await service.create(
-                    number=request.employee_number,
+                    code=request.employee_number,  # Map employee_number to code
                     first_name=first_name,
                     last_name=last_name,
                     email=request.employee_email

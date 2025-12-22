@@ -12,9 +12,9 @@ def employee_to_proto(employee) -> employee_pb2.Employee:
     """Convert Employee model to protobuf message."""
     proto = employee_pb2.Employee(
         employee_id=employee.id,
-        employee_number=employee.number or "",
-        employee_name=employee.user.name if employee.user else "",
-        employee_email=employee.user.email if employee.user else "",
+        employee_number=employee.code or "",  # Map code to employee_number for proto compatibility
+        employee_name=employee.name or (employee.user.name if employee.user else ""),
+        employee_email=employee.email or (employee.user.email if employee.user else ""),
         employee_phone=employee.user.phone if employee.user else "",
         employee_position=employee.position or "",
         employee_type=employee.type or "",
@@ -47,25 +47,31 @@ def employee_to_proto(employee) -> employee_pb2.Employee:
     
     # Set supervisor info
     if employee.supervisor:
+        supervisor_name = employee.supervisor.name
+        if not supervisor_name and employee.supervisor.user:
+            supervisor_name = employee.supervisor.user.name
         proto.supervisor.CopyFrom(employee_pb2.EmployeeInfo(
             employee_id=employee.supervisor.id,
-            employee_number=employee.supervisor.number or "",
-            employee_name=employee.supervisor.user.name if employee.supervisor.user else "",
+            employee_number=employee.supervisor.code or "",
+            employee_name=supervisor_name or "",
             employee_position=employee.supervisor.position or "",
         ))
     
     # Set metadata
-    if employee.metadata:
-        proto.employee_metadata.update(employee.metadata)
+    if employee.metadata_:
+        proto.employee_metadata.update(employee.metadata_)
     
     return proto
 
 
 def employee_info_to_proto(employee) -> employee_pb2.EmployeeInfo:
     """Convert Employee model to EmployeeInfo protobuf."""
+    name = employee.name
+    if not name and employee.user:
+        name = employee.user.name
     return employee_pb2.EmployeeInfo(
         employee_id=employee.id,
-        employee_number=employee.number or "",
-        employee_name=employee.user.name if employee.user else "",
+        employee_number=employee.code or "",
+        employee_name=name or "",
         employee_position=employee.position or "",
     )

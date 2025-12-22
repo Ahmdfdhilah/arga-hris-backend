@@ -23,7 +23,7 @@ class OrgUnitHeadNestedResponse(BaseModel):
     """Nested head employee data in org unit response"""
 
     id: int
-    number: Optional[str] = None
+    code: Optional[str] = None
     name: Optional[str] = None
     position: Optional[str] = None
 
@@ -33,12 +33,12 @@ class OrgUnitHeadNestedResponse(BaseModel):
     @classmethod
     def from_employee(cls, employee) -> "OrgUnitHeadNestedResponse":
         """Create response from Employee model with user relationship."""
-        name = None
-        if employee.user:
+        name = employee.name  # Use denormalized name first
+        if not name and employee.user:
             name = employee.user.name
         return cls(
             id=employee.id,
-            number=employee.number,
+            code=employee.code,
             name=name,
             position=employee.position,
         )
@@ -64,7 +64,7 @@ class OrgUnitResponse(BaseModel):
     updated_by: Optional[str] = None
     deleted_at: Optional[datetime] = None
     deleted_by: Optional[str] = None
-    # Nested relationships
+ 
     parent: Optional[OrgUnitParentNestedResponse] = None
     head: Optional[OrgUnitHeadNestedResponse] = None
 

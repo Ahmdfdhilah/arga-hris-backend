@@ -15,8 +15,11 @@ class EmployeeEventUtil:
         data = {
             "id": employee.id,
             "user_id": employee.user_id,
-            "number": employee.number,
+            "code": employee.code,
+            "name": employee.name,
+            "email": employee.email,
             "position": employee.position,
+            "site": employee.site,
             "type": employee.type,
             "org_unit_id": employee.org_unit_id,
             "supervisor_id": employee.supervisor_id,
