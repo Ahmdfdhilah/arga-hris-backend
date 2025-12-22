@@ -9,7 +9,7 @@ from app.core.utils.file_upload import upload_file_to_gcp, generate_signed_url_f
 from app.core.utils.datetime import get_utc_now
 from app.config.settings import settings
 from app.config.constants import FileUploadConstants
-from app.external_clients.rest.nominatim_client import nominatim_client
+from app.core.utils.nominatim import nominatim_client
 from app.modules.attendances.utils.validators import (
     validate_working_day_and_employee_type,
     validate_not_on_leave,
