@@ -281,7 +281,31 @@ def create_hris_employees(
         name = emp.get("employee_name")    # Denormalized name
         email = old_email                   # Denormalized email
         position = emp.get("employee_position")
-        emp_type = emp.get("employee_type")  # Now this is employment type (fulltime/contract/intern)
+        # Schema validation/mapping
+        
+        # 1. Type Mapping (fulltime, contract, intern)
+        emp_type_raw = str(emp.get("employee_type", "")).lower()
+        if "pkwt" in emp_type_raw or "contract" in emp_type_raw:
+            emp_type = "contract"
+        elif "intern" in emp_type_raw or "magang" in emp_type_raw:
+            emp_type = "intern"
+        elif "full" in emp_type_raw or "permanent" in emp_type_raw or "pkett" in emp_type_raw:
+            emp_type = "fulltime"
+        else:
+            emp_type = "fulltime"
+
+        # 2. Site Mapping (on_site, hybrid, ho)
+        # Assuming source might have 'site' or 'location'
+        site_raw = str(emp.get("employee_type", "") or emp.get("employee_location", "")).lower()
+        if "ho" in site_raw or "head" in site_raw:
+            site = "ho"
+        elif "hybrid" in site_raw:
+            site = "hybrid"
+        elif "site" in site_raw or "lapangan" in site_raw:
+            site = "on_site"
+        else:
+            site = "on_site"
+
         old_org_unit_id = emp.get("employee_org_unit_id")
         is_active = emp.get("is_active", "t") == "t"
 
@@ -299,8 +323,8 @@ def create_hris_employees(
 
         session.execute(
             text("""
-                INSERT INTO employees (user_id, name, email, code, position, type, org_unit_id, is_active, created_by, created_at, updated_at)
-                VALUES (:user_id, :name, :email, :code, :position, :type, :org_unit_id, :is_active, :created_by, NOW(), NOW())
+                INSERT INTO employees (user_id, name, email, code, position, type, site, org_unit_id, is_active, created_by, created_at, updated_at)
+                VALUES (:user_id, :name, :email, :code, :position, :type, :site, :org_unit_id, :is_active, :created_by, NOW(), NOW())
             """),
             {
                 "user_id": sso_user_id,
@@ -309,6 +333,7 @@ def create_hris_employees(
                 "code": code,
                 "position": position,
                 "type": emp_type,
+                "site": site,
                 "org_unit_id": org_unit_id,
                 "is_active": is_active,
                 "created_by": admin_id,

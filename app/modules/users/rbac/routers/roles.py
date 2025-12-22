@@ -14,7 +14,7 @@ from app.modules.users.rbac.schemas.responses import (
     MultipleRoleAssignmentResponse,
 )
 from app.core.dependencies.auth import get_current_user
-from app.core.security.rbac import require_role
+from app.core.security.rbac import require_role, require_permission
 from app.core.schemas import DataResponse, CurrentUser
 
 router = APIRouter(prefix="/roles", tags=["Roles & Permissions"])
