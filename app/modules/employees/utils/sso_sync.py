@@ -140,10 +140,26 @@ class SSOSyncUtil:
     async def restore_sso_user(
         sso_client: SSOUserGRPCClient, user_commands: UserCommands, user_id: str
     ) -> None:
-        """Restore SSO user and reactivate local user"""
+        """
+        Restore SSO user and reactivate local user.
+        If SSO user doesn't exist (was hard deleted), logs warning and continues
+        with local user activation only.
+        """
         if user_id:
             result = await sso_client.update_user(user_id=user_id, status="active")
             if not result.get("success"):
-                logger.warning(f"Failed to restore SSO user {user_id}: {result.get('error')}")
+                error_msg = result.get("error", "")
+                # Check if user not found in SSO
+                if "tidak ditemukan" in error_msg or "not found" in error_msg.lower():
+                    logger.warning(
+                        f"SSO user {user_id} not found during restore. "
+                        "The SSO account may have been permanently deleted. "
+                        "Restoring local user only."
+                    )
+                else:
+                    logger.warning(f"Failed to restore SSO user {user_id}: {error_msg}")
+            else:
+                logger.info(f"SSO user {user_id} status restored to active")
 
+            # Always reactivate locally
             await user_commands.activate(user_id)
