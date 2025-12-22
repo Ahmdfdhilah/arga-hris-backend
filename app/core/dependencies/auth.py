@@ -80,14 +80,14 @@ async def get_current_user(
     3. Get HRIS-specific roles/permissions
     """
     from app.modules.users.users.repositories import UserQueries, UserCommands
-    from app.modules.users.rbac.repositories.role_repository import RoleRepository
+    from app.modules.users.rbac.repositories import RoleQueries, RoleCommands
     from app.modules.employees.repositories import EmployeeQueries
     from app.config.database import get_db_context
 
     try:
         payload = _verify_token_locally(token)
 
-        user_id = payload.get("sub")  # SSO UUID is the user.id
+        user_id = payload.get("sub")  
         if not user_id:
             raise UnauthorizedException("Token missing user ID")
 
@@ -102,28 +102,28 @@ async def get_current_user(
         async with get_db_context() as db:
             user_queries = UserQueries(db)
             user_commands = UserCommands(db)
-            role_repo = RoleRepository(db)
+            role_queries = RoleQueries(db)
+            role_commands = RoleCommands(db)
             employee_queries = EmployeeQueries(db)
 
-            user = await user_queries.get_by_id(user_id)  # Direct lookup by ID
+            user = await user_queries.get_by_id(user_id)  
 
             if not user:
                 user = await _create_hris_user(
-                    user_commands, role_repo, user_id, sso_user
+                    user_commands, role_queries, role_commands, user_id, sso_user
                 )
                 await db.commit()
 
             if not user.is_active:
                 raise UnauthorizedException("Akun pengguna tidak aktif di HRIS")
 
-            user_roles = await role_repo.get_user_roles(user.id)
-            user_permissions = await role_repo.get_user_permissions(user.id)
+            user_roles = await role_queries.get_user_roles(user.id)
+            user_permissions = await role_queries.get_user_permissions(user.id)
 
-            # Separate query for employee to avoid lazy loading issues
             employee = await employee_queries.get_by_user_id(user.id)
 
             return CurrentUser(
-                id=user.id,  # user.id is the SSO UUID
+                id=user.id,  
                 employee_id=employee.id if employee else None,
                 org_unit_id=employee.org_unit_id if employee else None,
                 name=sso_user.get("name") or "",
@@ -152,18 +152,20 @@ async def get_current_user(
         )
 
 
-async def _create_hris_user(user_commands, role_repo, user_id: str, sso_user: dict):
+async def _create_hris_user(
+    user_commands, role_queries, role_commands, user_id: str, sso_user: dict
+):
     """Create HRIS user on first login (JIT provisioning)."""
 
     user = await user_commands.create_from_sso(
-        sso_id=user_id,  # This sets user.id = user_id
+        sso_id=user_id,  
         name=sso_user.get("name") or "",
     )
 
     try:
-        role = await role_repo.get_role_by_name("employee")
+        role = await role_queries.get_role_by_name("employee")
         if role:
-            await role_repo.assign_role(user.id, role.id)
+            await role_commands.assign_role(user.id, role.id)
     except Exception as e:
         logger.warning(f"Failed to assign role to user {user.id}: {str(e)}")
 

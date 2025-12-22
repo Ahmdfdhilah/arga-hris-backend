@@ -5,6 +5,7 @@
 2.  **KONSISTENSI**: Ikuti pattern yang ada. Jangan "kreatif" sendiri.
 3.  **VERIFIKASI**: Cek dokumentasi resmi library sebelum asumsi.
 4.  **CHECKLIST**: Wajib self-check sebelum coding.
+5.  **CLEAN COMMENT**: Jangan komen verbose tidak perlu.
 
 ---
 

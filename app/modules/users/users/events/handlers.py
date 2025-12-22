@@ -24,7 +24,7 @@ class UserCreatedHandler(BaseEventHandler):
             repo = UserCommands(db)
 
             await repo.sync_from_sso(
-                sso_id=str(event.entity_id),  # event.entity_id is used as user.id
+                sso_id=str(event.entity_id),
                 name=event.data.get("name"),
                 email=event.data.get("email"),
                 phone=event.data.get("phone"),
@@ -51,7 +51,6 @@ class UserUpdatedHandler(BaseEventHandler):
             queries = UserQueries(db)
             commands = UserCommands(db)
 
-            # Only sync if user exists locally
             existing = await queries.get_by_id(str(event.entity_id))
             if not existing:
                 self.logger.warning(

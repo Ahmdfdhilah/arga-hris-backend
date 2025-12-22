@@ -2,7 +2,7 @@
 User Command Repository - Write operations
 """
 
-from typing import Optional, Dict, Any
+from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 
@@ -15,23 +15,15 @@ class UserCommands:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create(self, data: Dict[str, Any]) -> User:
-        user = User(**data)
+    async def create(self, user: User) -> User:
+        """Create new user."""
         self.db.add(user)
         await self.db.commit()
         await self.db.refresh(user)
         return user
 
-    async def update(self, user_id: str, data: Dict[str, Any]) -> Optional[User]:
-        from app.modules.users.users.repositories.queries import UserQueries
-
-        queries = UserQueries(self.db)
-        user = await queries.get_by_id(user_id)
-        if not user:
-            return None
-
-        for key, value in data.items():
-            setattr(user, key, value)
+    async def update(self, user: User) -> User:
+        """Update user."""
         await self.db.commit()
         await self.db.refresh(user)
         return user
@@ -46,17 +38,17 @@ class UserCommands:
         avatar_path: Optional[str] = None,
     ) -> User:
         """Create user from SSO data. sso_id becomes user.id."""
-        data = {
-            "id": sso_id,  # SSO UUID is the primary key
-            "name": name,
-            "email": email,
-            "phone": phone,
-            "gender": gender,
-            "avatar_path": avatar_path,
-            "is_active": True,
-            "synced_at": datetime.utcnow(),
-        }
-        return await self.create(data)
+        user = User(
+            id=sso_id, 
+            name=name,
+            email=email,
+            phone=phone,
+            gender=gender,
+            avatar_path=avatar_path,
+            is_active=True,
+            synced_at=datetime.utcnow(),
+        )
+        return await self.create(user)
 
     async def sync_from_sso(
         self,
@@ -71,31 +63,54 @@ class UserCommands:
         from app.modules.users.users.repositories.queries import UserQueries
 
         queries = UserQueries(self.db)
-        existing = await queries.get_by_id(sso_id)  # Lookup by ID (which is SSO UUID)
-
-        update_data = {"synced_at": datetime.utcnow()}
-        if name is not None:
-            update_data["name"] = name
-        if email is not None:
-            update_data["email"] = email
-        if phone is not None:
-            update_data["phone"] = phone
-        if gender is not None:
-            update_data["gender"] = gender
-        if avatar_path is not None:
-            update_data["avatar_path"] = avatar_path
+        existing = await queries.get_by_id(sso_id)  
 
         if existing:
-            return await self.update(existing.id, update_data)
+            existing.synced_at = datetime.utcnow()
+            if name is not None:
+                existing.name = name
+            if email is not None:
+                existing.email = email
+            if phone is not None:
+                existing.phone = phone
+            if gender is not None:
+                existing.gender = gender
+            if avatar_path is not None:
+                existing.avatar_path = avatar_path
+            return await self.update(existing)
         else:
-            update_data["id"] = sso_id  # Set id directly
-            update_data["is_active"] = True
-            if name is None:
-                update_data["name"] = ""
-            return await self.create(update_data)
+            new_user = User(
+                id=sso_id,
+                name=name if name is not None else "",
+                email=email,
+                phone=phone,
+                gender=gender,
+                avatar_path=avatar_path,
+                is_active=True,
+                synced_at=datetime.utcnow(),
+            )
+            return await self.create(new_user)
 
     async def deactivate(self, user_id: str) -> Optional[User]:
-        return await self.update(user_id, {"is_active": False})
+        """Deactivate user by ID."""
+        from app.modules.users.users.repositories.queries import UserQueries
+
+        queries = UserQueries(self.db)
+        user = await queries.get_by_id(user_id)
+        if not user:
+            return None
+
+        user.is_active = False
+        return await self.update(user)
 
     async def activate(self, user_id: str) -> Optional[User]:
-        return await self.update(user_id, {"is_active": True})
+        """Activate user by ID."""
+        from app.modules.users.users.repositories.queries import UserQueries
+
+        queries = UserQueries(self.db)
+        user = await queries.get_by_id(user_id)
+        if not user:
+            return None
+
+        user.is_active = True
+        return await self.update(user)

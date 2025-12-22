@@ -1,6 +1,19 @@
+"""
+Role Service - Facade for RBAC use cases
+"""
+
 from typing import List
-from app.modules.users.rbac.repositories.role_repository import RoleRepository
+
+from app.modules.users.rbac.repositories import RoleQueries, RoleCommands
 from app.modules.users.users.repositories import UserQueries
+from app.modules.users.rbac.use_cases import (
+    AssignRoleToUserUseCase,
+    RemoveRoleFromUserUseCase,
+    AssignMultipleRolesUseCase,
+    GetUserRolesPermissionsUseCase,
+    ListRolesUseCase,
+    ListPermissionsUseCase,
+)
 from app.modules.users.rbac.schemas.responses import (
     RoleResponse,
     PermissionResponse,
@@ -8,194 +21,78 @@ from app.modules.users.rbac.schemas.responses import (
     RoleAssignmentResponse,
     MultipleRoleAssignmentResponse,
 )
-from app.core.exceptions import NotFoundException
-from app.core.schemas import (
-    DataResponse,
-    create_success_response,
-)
+from app.core.schemas import DataResponse, create_success_response
 
 
 class RoleService:
+    """Facade for RBAC operations"""
+
     def __init__(
         self,
-        role_repo: RoleRepository,
+        role_queries: RoleQueries,
+        role_commands: RoleCommands,
         user_queries: UserQueries,
     ):
-        self.role_repo = role_repo
-        self.user_queries = user_queries
-
-    async def get_user_roles(self, user_id: str) -> List[str]:
-        """Get list of role names for a user"""
-        return await self.role_repo.get_user_roles(user_id)
-
-    async def get_user_permissions(self, user_id: str) -> List[str]:
-        """Get list of permission codes for a user"""
-        return await self.role_repo.get_user_permissions(user_id)
+        # Initialize use cases
+        self.assign_role_uc = AssignRoleToUserUseCase(
+            role_queries, role_commands, user_queries
+        )
+        self.remove_role_uc = RemoveRoleFromUserUseCase(
+            role_queries, role_commands, user_queries
+        )
+        self.assign_multiple_roles_uc = AssignMultipleRolesUseCase(
+            role_queries, role_commands, user_queries
+        )
+        self.get_user_roles_permissions_uc = GetUserRolesPermissionsUseCase(
+            role_queries, user_queries
+        )
+        self.list_roles_uc = ListRolesUseCase(role_queries)
+        self.list_permissions_uc = ListPermissionsUseCase(role_queries)
 
     async def assign_role_by_name(
         self, user_id: str, role_name: str
     ) -> DataResponse[RoleAssignmentResponse]:
-        """
-        Assign role ke user berdasarkan nama role
-
-        Args:
-            user_id: ID user (UUID string)
-            role_name: Nama role yang akan di-assign
-
-        Returns:
-            DataResponse dengan RoleAssignmentResponse
-
-        Raises:
-            NotFoundException: Jika user atau role tidak ditemukan
-        """
-        # Validate user exists
-        user = await self.user_queries.get_by_id(user_id)
-        if not user:
-            raise NotFoundException(f"User dengan ID {user_id} tidak ditemukan")
-
-        role = await self.role_repo.get_role_by_name(role_name)
-        if not role:
-            raise NotFoundException(f"Role '{role_name}' tidak ditemukan")
-
-        await self.role_repo.assign_role(user_id, role.id)
-
-        response_data = RoleAssignmentResponse(user_id=user_id, role_name=role_name)
-
+        """Assign role to user"""
+        result = await self.assign_role_uc.execute(user_id, role_name)
         return create_success_response(
-            message=f"Role '{role_name}' berhasil di-assign ke user", data=response_data
+            message=f"Role '{role_name}' berhasil di-assign ke user", data=result
         )
 
     async def remove_role_by_name(
         self, user_id: str, role_name: str
     ) -> DataResponse[RoleAssignmentResponse]:
-        """
-        Remove role dari user berdasarkan nama role
-
-        Args:
-            user_id: ID user (UUID string)
-            role_name: Nama role yang akan di-remove
-
-        Returns:
-            DataResponse dengan RoleAssignmentResponse
-
-        Raises:
-            NotFoundException: Jika user atau role tidak ditemukan
-        """
-        # Validate user exists
-        user = await self.user_queries.get_by_id(user_id)
-        if not user:
-            raise NotFoundException(f"User dengan ID {user_id} tidak ditemukan")
-
-        role = await self.role_repo.get_role_by_name(role_name)
-        if not role:
-            raise NotFoundException(f"Role '{role_name}' tidak ditemukan")
-
-        await self.role_repo.remove_role(user_id, role.id)
-
-        response_data = RoleAssignmentResponse(user_id=user_id, role_name=role_name)
-
+        """Remove role from user"""
+        result = await self.remove_role_uc.execute(user_id, role_name)
         return create_success_response(
-            message=f"Role '{role_name}' berhasil di-remove dari user",
-            data=response_data,
+            message=f"Role '{role_name}' berhasil di-remove dari user", data=result
         )
 
     async def assign_multiple_roles(
         self, user_id: str, role_names: List[str]
     ) -> DataResponse[MultipleRoleAssignmentResponse]:
-        """
-        Assign multiple roles ke user sekaligus
-
-        Args:
-            user_id: ID user (UUID string)
-            role_names: List nama role yang akan di-assign
-
-        Returns:
-            DataResponse dengan MultipleRoleAssignmentResponse
-
-        Raises:
-            NotFoundException: Jika user atau salah satu role tidak ditemukan
-        """
-        # Validate user exists
-        user = await self.user_queries.get_by_id(user_id)
-        if not user:
-            raise NotFoundException(f"User dengan ID {user_id} tidak ditemukan")
-
-        for role_name in role_names:
-            role = await self.role_repo.get_role_by_name(role_name)
-            if not role:
-                raise NotFoundException(f"Role '{role_name}' tidak ditemukan")
-            await self.role_repo.assign_role(user_id, role.id)
-
-        response_data = MultipleRoleAssignmentResponse(
-            user_id=user_id, roles=role_names
-        )
-
+        """Assign multiple roles to user"""
+        result = await self.assign_multiple_roles_uc.execute(user_id, role_names)
         return create_success_response(
-            message="Multiple roles berhasil di-assign ke user", data=response_data
+            message="Multiple roles berhasil di-assign ke user", data=result
         )
 
     async def get_user_roles_and_permissions(
         self, user_id: str
     ) -> DataResponse[UserRolesPermissionsResponse]:
-        """
-        Get roles dan permissions user
-
-        Args:
-            user_id: ID user (UUID string)
-
-        Returns:
-            DataResponse dengan UserRolesPermissionsResponse
-
-        Raises:
-            NotFoundException: Jika user tidak ditemukan
-        """
-        user = await self.user_queries.get_by_id(user_id)
-        if not user:
-            raise NotFoundException(f"User dengan ID {user_id} tidak ditemukan")
-
-        roles = await self.role_repo.get_user_roles(user_id)
-        permissions = await self.role_repo.get_user_permissions(user_id)
-
-        response_data = UserRolesPermissionsResponse(
-            user_id=user.id,
-            email=user.email,
-            full_name=user.name,  # User model has 'name' not 'full_name'
-            roles=roles,
-            permissions=permissions,
-        )
-
+        """Get user roles and permissions"""
+        result = await self.get_user_roles_permissions_uc.execute(user_id)
         return create_success_response(
-            message="User roles dan permissions berhasil diambil", data=response_data
+            message="User roles dan permissions berhasil diambil", data=result
         )
 
     async def get_all_roles(self) -> DataResponse[List[RoleResponse]]:
-        """
-        Get semua roles yang tersedia
-
-        Returns:
-            DataResponse dengan list RoleResponse
-        """
-        roles = await self.role_repo.get_all_roles()
-        # Convert SQLAlchemy models to Pydantic schemas
-        roles_data: List[RoleResponse] = [
-            RoleResponse.model_validate(role) for role in roles
-        ]
-        return create_success_response(
-            message="Roles berhasil diambil", data=roles_data
-        )
+        """Get all available roles"""
+        result = await self.list_roles_uc.execute()
+        return create_success_response(message="Roles berhasil diambil", data=result)
 
     async def get_all_permissions(self) -> DataResponse[List[PermissionResponse]]:
-        """
-        Get semua permissions yang tersedia
-
-        Returns:
-            DataResponse dengan list PermissionResponse
-        """
-        permissions = await self.role_repo.get_all_permissions()
-        # Convert SQLAlchemy models to Pydantic schemas
-        permissions_data: List[PermissionResponse] = [
-            PermissionResponse.model_validate(perm) for perm in permissions
-        ]
+        """Get all available permissions"""
+        result = await self.list_permissions_uc.execute()
         return create_success_response(
-            message="Permissions berhasil diambil", data=permissions_data
+            message="Permissions berhasil diambil", data=result
         )
