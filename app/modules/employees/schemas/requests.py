@@ -2,15 +2,14 @@
 Employee Request Schemas
 """
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
-from typing import Optional
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+from typing import Optional, Any
 
 
 class EmployeeCreateRequest(BaseModel):
     """Create employee with SSO user account"""
 
-    first_name: str = Field(..., min_length=1, max_length=100)
-    last_name: str = Field(..., min_length=1, max_length=100)
+    name: str = Field(..., min_length=1, max_length=200)
     email: EmailStr
     phone: Optional[str] = Field(None, max_length=50)
     gender: Optional[str] = None
@@ -28,7 +27,7 @@ class EmployeeCreateRequest(BaseModel):
             raise ValueError("Employee code is required")
         return v.strip().upper()
 
-    @field_validator("first_name", "last_name")
+    @field_validator("name")
     @classmethod
     def validate_name(cls, v):
         if not v or not v.strip():
@@ -61,16 +60,15 @@ class EmployeeUpdateRequest(BaseModel):
     """
     Update employee fields.
     
-    - first_name/last_name: Updates denormalized `name` on Employee only (NOT synced to SSO)
+    - name: Updates denormalized `name` on Employee only (NOT synced to SSO)
     - email/phone: Synced to SSO
     - Other fields: Employee-only
     
     Note: Sending null explicitly clears optional fields.
     """
 
-    # Name fields (Employee-only, updates denormalized name, NOT synced to SSO)
-    first_name: Optional[str] = Field(None, max_length=100)
-    last_name: Optional[str] = Field(None, max_length=100)
+    # Name field (Employee-only, updates denormalized name, NOT synced to SSO)
+    name: Optional[str] = Field(None, max_length=200)
 
     # SSO-synced fields (email/phone only)
     email: Optional[EmailStr] = None
@@ -92,7 +90,7 @@ class EmployeeUpdateRequest(BaseModel):
             raise ValueError("Employee code cannot be empty")
         return v.strip().upper() if v else v
 
-    @field_validator("first_name", "last_name")
+    @field_validator("name")
     @classmethod
     def validate_name(cls, v):
         if v is not None and v != "":

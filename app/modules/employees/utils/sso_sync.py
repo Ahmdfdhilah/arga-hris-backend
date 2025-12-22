@@ -19,8 +19,7 @@ class SSOSyncUtil:
         user_queries: UserQueries,
         user_commands: UserCommands,
         email: str,
-        first_name: str,
-        last_name: str,
+        name: str,
         phone: Optional[str] = None,
         gender: Optional[str] = None,
     ) -> User:
@@ -30,7 +29,7 @@ class SSOSyncUtil:
         """
         create_result = await sso_client.create_user(
             email=email,
-            name=f"{first_name} {last_name}".strip(),
+            name=name,
             phone=phone,
             gender=gender,
             role="user",
@@ -80,6 +79,7 @@ class SSOSyncUtil:
         """
         Update SSO user details and sync local User table.
         Only syncs email and phone to SSO (name and gender are not synced on update).
+        If SSO user not found, logs warning and updates local user only.
         """
         local_user = await user_queries.get_by_id(user_id)
         if not local_user:
@@ -97,24 +97,31 @@ class SSOSyncUtil:
                 user_id=local_user.id, **sso_update_fields
             )
             if not sso_result.get("success"):
-                raise ConflictException(
-                    f"Failed to update SSO user: {sso_result.get('error')}"
-                )
+                error_msg = sso_result.get("error", "")
+                # If SSO user not found, log warning and update local only
+                if "tidak ditemukan" in error_msg or "not found" in error_msg.lower():
+                    logger.warning(
+                        f"SSO user {user_id} not found, updating local user only"
+                    )
+                else:
+                    raise ConflictException(
+                        f"Failed to update SSO user: {error_msg}"
+                    )
+            else:
+                sso_user = sso_result.get("user", {})
 
-            sso_user = sso_result.get("user", {})
+                # Update user model object directly
+                local_user.synced_at = datetime.utcnow()
+                if "email" in sso_update_fields:
+                    local_user.email = sso_user.get(
+                        "email", sso_update_fields["email"]
+                    )
+                if "phone" in sso_update_fields:
+                    local_user.phone = sso_user.get(
+                        "phone", sso_update_fields["phone"]
+                    )
 
-            # Update user model object directly
-            local_user.synced_at = datetime.utcnow()
-            if "email" in sso_update_fields:
-                local_user.email = sso_user.get(
-                    "email", sso_update_fields["email"]
-                )
-            if "phone" in sso_update_fields:
-                local_user.phone = sso_user.get(
-                    "phone", sso_update_fields["phone"]
-                )
-
-            await user_commands.update(local_user)
+                await user_commands.update(local_user)
 
     @staticmethod
     async def delete_sso_user(

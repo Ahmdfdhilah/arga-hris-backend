@@ -51,7 +51,7 @@ class UpdateEmployeeUseCase:
         """
         Execute the update employee use case.
         
-        - first_name/last_name: Updates denormalized name on Employee only (NOT synced to SSO)
+        - name: Updates denormalized name on Employee only (NOT synced to SSO)
         - email/phone: Synced to SSO
         - Sending null/None explicitly clears optional fields
         """
@@ -95,26 +95,9 @@ class UpdateEmployeeUseCase:
         if "email" in update_data:
             employee.email = update_data["email"]  # Can be None to clear
 
-        # 2. Update denormalized name from first_name/last_name (Employee only, NOT SSO)
-        if "first_name" in update_data or "last_name" in update_data:
-            first_name = update_data.get("first_name")
-            last_name = update_data.get("last_name")
-            
-            # Build new name from provided parts or existing
-            current_name_parts = (employee.name or "").split(" ", 1)
-            current_first = current_name_parts[0] if current_name_parts else ""
-            current_last = current_name_parts[1] if len(current_name_parts) > 1 else ""
-            
-            # Use provided value or keep existing (None means clear)
-            new_first = first_name if "first_name" in update_data else current_first
-            new_last = last_name if "last_name" in update_data else current_last
-            
-            # Handle explicit null - clears the part
-            new_first = "" if new_first is None else new_first
-            new_last = "" if new_last is None else new_last
-            
-            new_name = f"{new_first} {new_last}".strip()
-            employee.name = new_name if new_name else None
+        # 2. Update denormalized name (Employee only, NOT SSO)
+        if "name" in update_data:
+            employee.name = update_data["name"]  # None clears
 
         # 3. Update Employee-only Fields (handle null for clearing)
         if "position" in update_data:

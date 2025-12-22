@@ -63,6 +63,8 @@ class EmployeeResponse(BaseModel):
     is_active: bool = True
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    deleted_at: Optional[datetime] = None
+    deleted_by: Optional[str] = None
 
     user: Optional[UserNestedResponse] = None
     org_unit: Optional[EmployeeOrgUnitNestedResponse] = None

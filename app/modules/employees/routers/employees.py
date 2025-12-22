@@ -168,8 +168,7 @@ async def create_employee(
 ) -> DataResponse[EmployeeResponse]:
     data = await service.create(
         code=request.code,
-        first_name=request.first_name,
-        last_name=request.last_name,
+        name=request.name,
         email=request.email,
         created_by=current_user.id,
         org_unit_id=request.org_unit_id,

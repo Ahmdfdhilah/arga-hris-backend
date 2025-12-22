@@ -36,22 +36,13 @@ class Employee(Base, TimestampMixin):
 
     name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True, index=True)
     email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
-
-    # Employee identification
+    
     code: Mapped[str] = mapped_column(
         String(50), unique=True, nullable=False, index=True
     )
-
-    # Employment data
     position: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    
-    # Work location type: on_site, hybrid, ho
     site: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    
-    # Employment type: fulltime, contract, intern
     type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-
-    # Organization structure
     org_unit_id: Mapped[Optional[int]] = mapped_column(
         Integer,
         ForeignKey("org_units.id", ondelete="SET NULL"),
@@ -65,7 +56,6 @@ class Employee(Base, TimestampMixin):
         index=True,
     )
 
-    # Additional data
     metadata_: Mapped[Optional[dict]] = mapped_column("metadata", JSONB, nullable=True)
     is_active: Mapped[bool] = mapped_column(
         Boolean, default=True, nullable=False, index=True

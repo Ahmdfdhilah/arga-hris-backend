@@ -41,8 +41,7 @@ class CreateEmployeeUseCase:
     async def execute(
         self,
         code: str,
-        first_name: str,
-        last_name: str,
+        name: str,
         email: str,
         created_by: str,
         org_unit_id: Optional[int] = None,
@@ -68,8 +67,7 @@ class CreateEmployeeUseCase:
             user_queries=self.user_queries,
             user_commands=self.user_commands,
             email=email,
-            first_name=first_name,
-            last_name=last_name,
+            name=name,
             phone=phone,
             gender=gender,
         )
@@ -84,10 +82,9 @@ class CreateEmployeeUseCase:
             )
 
         # 3. Create Employee with denormalized name/email
-        full_name = f"{first_name} {last_name}".strip()
         employee = Employee(
             user_id=local_user.id,
-            name=full_name,
+            name=name,
             email=email,
             code=code,
             position=position,

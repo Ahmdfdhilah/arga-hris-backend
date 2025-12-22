@@ -98,8 +98,7 @@ class EmployeeService:
     async def create(
         self,
         code: str,
-        first_name: str,
-        last_name: str,
+        name: str,
         email: str,
         created_by: str,
         org_unit_id: Optional[int] = None,
@@ -112,8 +111,7 @@ class EmployeeService:
     ) -> EmployeeResponse:
         employee, warning = await self.create_uc.execute(
             code=code,
-            first_name=first_name,
-            last_name=last_name,
+            name=name,
             email=email,
             created_by=created_by,
             org_unit_id=org_unit_id,
