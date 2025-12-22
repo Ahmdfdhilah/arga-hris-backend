@@ -28,7 +28,6 @@ class GetLeaveRequestUseCase:
                 f"Leave request dengan ID {leave_request_id} tidak ditemukan"
             )
 
-        # Build replacement info if replacement_employee_id exists
         replacement_info = None
         if leave_request.replacement_employee_id and self.employee_queries:
             replacement_emp = await self.employee_queries.get_by_id(
@@ -47,7 +46,7 @@ class GetLeaveRequestUseCase:
                     employee_name=replacement_emp.user.name
                     if replacement_emp.user
                     else None,
-                    employee_number=replacement_emp.number,
+                    employee_number=replacement_emp.code,
                     assignment_id=leave_request.assignment_id,
                     assignment_status=assignment_status,
                 )

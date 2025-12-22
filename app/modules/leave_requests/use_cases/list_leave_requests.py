@@ -84,9 +84,8 @@ class ListAllLeaveRequestsUseCase:
         for lr in leave_requests:
             emp = await self.employee_queries.get_by_id(lr.employee_id)
             employee_name = emp.user.name if emp and emp.user else None
-            employee_number = emp.number if emp else None
+            employee_number = emp.code if emp else None
 
-            # Get replacement employee name if exists
             replacement_employee_name = None
             if lr.replacement_employee_id:
                 replacement_emp = await self.employee_queries.get_by_id(
@@ -136,7 +135,6 @@ class ListTeamLeaveRequestsUseCase:
         limit: int = 10,
     ) -> Tuple[List[LeaveRequestListResponse], int]:
         # Get all subordinates recursively
-        # Fixed: get_subordinates returns (items, total)
         subordinates, _ = await self.employee_queries.get_subordinates(
             employee_id, recursive=True
         )
@@ -166,9 +164,8 @@ class ListTeamLeaveRequestsUseCase:
         for lr in leave_requests:
             emp = next((e for e in subordinates if e.id == lr.employee_id), None)
             employee_name = emp.user.name if emp and emp.user else None
-            employee_number = emp.number if emp else None
+            employee_number = emp.code if emp else None
 
-            # Get replacement employee name if exists
             replacement_employee_name = None
             if lr.replacement_employee_id:
                 replacement_emp = await self.employee_queries.get_by_id(

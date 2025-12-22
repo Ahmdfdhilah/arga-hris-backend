@@ -53,7 +53,6 @@ class UpdateLeaveRequestUseCase:
                 exclude_leave_request_id=leave_request_id,
             )
 
-            # Get employee info for calculating working days
             emp = await self.employee_queries.get_by_id(leave_request.employee_id)
             if not emp:
                 raise NotFoundException(
@@ -62,15 +61,24 @@ class UpdateLeaveRequestUseCase:
 
             employee_type = emp.employee_type
 
-            update_data["total_days"] = calculate_working_days(
+            if "start_date" in update_data:
+                leave_request.start_date = update_data["start_date"]
+            if "end_date" in update_data:
+                leave_request.end_date = update_data["end_date"]
+
+            leave_request.total_days = calculate_working_days(
                 new_start_date, new_end_date, employee_type
             )
 
         if "leave_type" in update_data:
-            update_data["leave_type"] = update_data["leave_type"].value
+            leave_request.leave_type = update_data["leave_type"].value
+        if "reason" in update_data:
+            leave_request.reason = update_data["reason"]
+        if "replacement_employee_id" in update_data:
+            leave_request.replacement_employee_id = update_data[
+                "replacement_employee_id"
+            ]
 
-        updated_leave_request = await self.commands.update(
-            leave_request_id, update_data
-        )
+        updated = await self.commands.update(leave_request)
 
-        return LeaveRequestResponse.model_validate(updated_leave_request)
+        return LeaveRequestResponse.model_validate(updated)

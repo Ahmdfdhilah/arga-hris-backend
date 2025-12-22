@@ -39,7 +39,7 @@ class DashboardService:
         return {
             "id": emp.id,
             "name": emp.user.name if emp.user else None,
-            "employee_number": emp.number,
+            "employee_number": emp.code,
             "org_unit_id": emp.org_unit_id,
             "position": emp.position,
         }
