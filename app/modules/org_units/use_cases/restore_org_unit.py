@@ -1,8 +1,14 @@
+"""
+Restore OrgUnit Use Case
+"""
+
 from typing import Optional
 from app.modules.org_units.models.org_unit import OrgUnit
 from app.modules.org_units.repositories import OrgUnitQueries, OrgUnitCommands
 from app.core.exceptions import NotFoundException, BadRequestException
 from app.core.messaging.event_publisher import EventPublisher
+
+from app.modules.org_units.utils.events import OrgUnitEventUtil
 
 
 class RestoreOrgUnitUseCase:
@@ -26,7 +32,6 @@ class RestoreOrgUnitUseCase:
         if not org_unit.is_deleted():
             raise BadRequestException("Organization unit is not deleted")
 
-        # Check if parent is deleted
         if org_unit.parent_id:
             parent = await self.queries.get_by_id_with_deleted(org_unit.parent_id)
             if parent and parent.is_deleted():
@@ -35,30 +40,6 @@ class RestoreOrgUnitUseCase:
                 )
 
         restored = await self.commands.restore(org_unit_id)
-
-        # Publish event (restored = updated)
-        if self.event_publisher:
-            await self._publish_event("updated", restored)
+        await OrgUnitEventUtil.publish(self.event_publisher, "updated", restored)
 
         return restored
-
-    async def _publish_event(self, event_type: str, org_unit: OrgUnit) -> None:
-        if not self.event_publisher:
-            return
-
-        try:
-            data = {
-                "id": org_unit.id,
-                "code": org_unit.code,
-                "name": org_unit.name,
-                "type": org_unit.type,
-                "parent_id": org_unit.parent_id,
-                "head_id": org_unit.head_id,
-                "level": org_unit.level,
-                "path": org_unit.path,
-                "is_active": org_unit.is_active,
-            }
-            if event_type == "updated":
-                await self.event_publisher.publish_org_unit_updated(org_unit.id, data)
-        except Exception:
-            pass

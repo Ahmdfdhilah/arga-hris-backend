@@ -137,7 +137,6 @@ class OrgUnitService:
         self, org_unit_id: Optional[int] = None
     ) -> OrgUnitHierarchyResponse:
 
-        # Reuse existing logic via queries directly available here.
         tree = await self.queries.get_tree(org_unit_id, max_depth=10)
 
         root = None

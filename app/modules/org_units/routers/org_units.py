@@ -298,13 +298,8 @@ async def update_org_unit(
     return create_success_response(message="Org unit berhasil diupdate", data=data)
 
 
-# ============================================================
-# Soft Delete Operations (IT Admin Only)
-# ============================================================
-
-
 @router.delete(
-    "/{org_unit_id}/soft-delete", response_model=DataResponse[OrgUnitResponse]
+    "/{org_unit_id}", response_model=DataResponse[OrgUnitResponse]
 )
 @require_permission("org_unit.soft_delete")
 async def soft_delete_org_unit(
