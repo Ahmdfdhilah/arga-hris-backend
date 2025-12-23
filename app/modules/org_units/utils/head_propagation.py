@@ -25,13 +25,17 @@ class OrgUnitHeadUtil:
         old_head_id: Optional[int],
         new_head_id: Optional[int],
         updated_by: str,
-    ) -> None:
+    ) -> list[int]:
         """
         Handle Org Unit Head change:
         - Update direct subordinates' supervisor_id
         - If Head cleared, resolve effective supervisor from parent
         - Propagate to child Org Units that don't have their own Head
+
+        Returns:
+            list[int]: List of affected employee IDs whose supervisor_id was updated
         """
+        affected_employee_ids = []
         effective_supervisor_id = new_head_id
         if not effective_supervisor_id:
             effective_supervisor_id = await OrgUnitHeadUtil.resolve_supervisor_for_unit(
@@ -62,14 +66,18 @@ class OrgUnitHeadUtil:
                 emp.supervisor_id = target_sup
                 emp.set_updated_by(updated_by)
                 await emp_commands.update(emp)
+                affected_employee_ids.append(emp.id)
 
         children, _ = await org_queries.get_children(org_unit_id, recursive=False)
         for child in children:
             if not child.head_id:
-                await OrgUnitHeadUtil.handle_head_change(
+                child_affected = await OrgUnitHeadUtil.handle_head_change(
                     org_queries, org_commands, emp_queries, emp_commands,
                     child.id, None, None, updated_by
                 )
+                affected_employee_ids.extend(child_affected)
+
+        return affected_employee_ids
 
     @staticmethod
     async def resolve_supervisor_for_unit(

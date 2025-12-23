@@ -15,6 +15,7 @@ from app.core.messaging import EventPublisher
 from app.modules.org_units.utils.path_calculator import OrgUnitPathUtil
 from app.modules.org_units.utils.head_propagation import OrgUnitHeadUtil
 from app.modules.org_units.utils.events import OrgUnitEventUtil
+from app.modules.employees.utils.events import EmployeeEventUtil
 
 logger = logging.getLogger(__name__)
 
@@ -97,10 +98,14 @@ class UpdateOrgUnitUseCase:
         org_unit.set_updated_by(updated_by)
         await self.commands.update(org_unit)
 
+        # Track affected entities for event publishing
+        affected_employee_ids = []
+        affected_org_unit_ids = []
+
         # Handle head change - delegate to util
         if ("head_id" in update_data or parent_changed) and self.employee_queries and self.employee_commands:
             new_head_id = org_unit.head_id
-            await OrgUnitHeadUtil.handle_head_change(
+            affected_employee_ids = await OrgUnitHeadUtil.handle_head_change(
                 self.queries,
                 self.commands,
                 self.employee_queries,
@@ -113,11 +118,36 @@ class UpdateOrgUnitUseCase:
 
         # Recalculate path if parent changed - delegate to util
         if parent_changed:
-            await OrgUnitPathUtil.recalculate_path(
+            affected_org_unit_ids = await OrgUnitPathUtil.recalculate_path(
                 self.queries, self.commands, org_unit
             )
 
         updated = await self.queries.get_by_id(org_unit_id)
+
         await OrgUnitEventUtil.publish(self.event_publisher, "updated", updated)
+
+        if self.event_publisher and affected_employee_ids:
+            logger.info(f"Publishing employee.updated for {len(affected_employee_ids)} affected employees")
+            for employee_id in affected_employee_ids:
+                affected_employee = await self.employee_queries.get_by_id(employee_id)
+                if affected_employee:
+                    await EmployeeEventUtil.publish(
+                        self.event_publisher,
+                        "updated",
+                        affected_employee
+                    )
+                    logger.debug(f"Published employee.updated for employee {employee_id}")
+
+        if self.event_publisher and affected_org_unit_ids:
+            logger.info(f"Publishing org_unit.updated for {len(affected_org_unit_ids)} affected descendants")
+            for descendant_id in affected_org_unit_ids:
+                affected_org_unit = await self.queries.get_by_id(descendant_id)
+                if affected_org_unit:
+                    await OrgUnitEventUtil.publish(
+                        self.event_publisher,
+                        "updated",
+                        affected_org_unit
+                    )
+                    logger.debug(f"Published org_unit.updated for descendant {descendant_id}")
 
         return updated

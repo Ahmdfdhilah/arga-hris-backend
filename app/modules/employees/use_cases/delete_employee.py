@@ -48,7 +48,6 @@ class DeleteEmployeeUseCase:
                 "Cannot delete: employee is org unit head. Reassign first."
             )
 
-        # 1. Delete SSO User
         if employee.user_id:
             await SSOSyncUtil.delete_sso_user(
                 sso_client=self.sso_client,
@@ -56,21 +55,30 @@ class DeleteEmployeeUseCase:
                 user_id=employee.user_id,
             )
 
-        # 2. Reassign Subordinates
         subordinates = await self.queries.get_all_by_supervisor(employee_id)
+        subordinate_ids = []
         if subordinates:
             subordinate_ids = [s.id for s in subordinates]
             await self.commands.bulk_update_supervisor(
                 subordinate_ids, employee.supervisor_id, deleted_by
             )
 
-        # 3. Delete Employee
         await self.commands.delete(employee_id, deleted_by)
 
         deleted = await self.queries.get_by_id_with_deleted(employee_id)
-
-        # 5. Publish Event
         if self.event_publisher:
             await EmployeeEventUtil.publish(self.event_publisher, "deleted", deleted)
+
+        if self.event_publisher and subordinate_ids:
+            logger.info(f"Publishing employee.updated for {len(subordinate_ids)} reassigned subordinates")
+            for subordinate_id in subordinate_ids:
+                updated_subordinate = await self.queries.get_by_id(subordinate_id)
+                if updated_subordinate:
+                    await EmployeeEventUtil.publish(
+                        self.event_publisher,
+                        "updated",
+                        updated_subordinate
+                    )
+                    logger.debug(f"Published employee.updated for subordinate {subordinate_id}")
 
         return {"success": True}
