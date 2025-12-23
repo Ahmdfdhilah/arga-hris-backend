@@ -7,7 +7,7 @@ from app.modules.org_units.models.org_unit import OrgUnit
 from app.modules.org_units.repositories import OrgUnitQueries, OrgUnitCommands
 from app.modules.employees.repositories import EmployeeQueries
 from app.core.exceptions import ConflictException, BadRequestException
-from app.core.messaging.event_publisher import EventPublisher
+from app.core.messaging import EventPublisher
 
 from app.modules.org_units.utils.path_calculator import OrgUnitPathUtil
 from app.modules.org_units.utils.events import OrgUnitEventUtil

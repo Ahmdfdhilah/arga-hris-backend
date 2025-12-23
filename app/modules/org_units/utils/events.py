@@ -7,7 +7,9 @@ from typing import Dict, Any, Optional
 import logging
 
 from app.modules.org_units.models.org_unit import OrgUnit
-from app.core.messaging.event_publisher import EventPublisher
+from datetime import datetime
+import uuid
+from app.core.messaging import EventPublisher, DomainEvent
 
 logger = logging.getLogger(__name__)
 
@@ -42,11 +44,17 @@ class OrgUnitEventUtil:
 
         try:
             data = OrgUnitEventUtil.to_event_data(org_unit)
-            if event_type == "created":
-                await event_publisher.publish_org_unit_created(org_unit.id, data)
-            elif event_type == "updated":
-                await event_publisher.publish_org_unit_updated(org_unit.id, data)
-            elif event_type == "deleted":
-                await event_publisher.publish_org_unit_deleted(org_unit.id, data)
+            
+            event = DomainEvent(
+                entity_type="org_unit",
+                event_action=event_type,
+                entity_id=org_unit.id,
+                data=data,
+                timestamp=datetime.utcnow(),
+                source_service="hris",
+                correlation_id=str(uuid.uuid4())
+            )
+            
+            await event_publisher.publish(event)
         except Exception as e:
             logger.warning(f"Failed to publish org_unit.{event_type} event: {e}")

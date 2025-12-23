@@ -5,7 +5,7 @@ Delete OrgUnit Use Case
 from typing import Optional
 from app.modules.org_units.repositories import OrgUnitQueries, OrgUnitCommands
 from app.core.exceptions import NotFoundException, BadRequestException
-from app.core.messaging.event_publisher import EventPublisher
+from app.core.messaging import EventPublisher
 
 from app.modules.org_units.utils.events import OrgUnitEventUtil
 

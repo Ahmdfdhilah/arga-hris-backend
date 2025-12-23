@@ -1,7 +1,9 @@
 from typing import Any, Dict
 import logging
 from app.modules.employees.models.employee import Employee
-from app.core.messaging.event_publisher import EventPublisher
+from datetime import datetime
+import uuid
+from app.core.messaging import EventPublisher, DomainEvent
 
 logger = logging.getLogger(__name__)
 
@@ -45,11 +47,17 @@ class EmployeeEventUtil:
 
         try:
             data = EmployeeEventUtil.to_event_data(employee)
-            if event_type == "created":
-                await event_publisher.publish_employee_created(employee.id, data)
-            elif event_type == "updated":
-                await event_publisher.publish_employee_updated(employee.id, data)
-            elif event_type == "deleted":
-                await event_publisher.publish_employee_deleted(employee.id, data)
+            
+            event = DomainEvent(
+                entity_type="employee",
+                event_action=event_type,
+                entity_id=employee.id,
+                data=data,
+                timestamp=datetime.utcnow(),
+                source_service="hris",
+                correlation_id=str(uuid.uuid4())
+            )
+            
+            await event_publisher.publish(event)
         except Exception as e:
             logger.warning(f"Failed to publish employee.{event_type}: {e}")

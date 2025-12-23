@@ -7,7 +7,7 @@ from app.modules.org_units.repositories import OrgUnitQueries
 from app.modules.users.users.repositories import UserQueries, UserCommands
 from app.modules.users.rbac.repositories import RoleQueries
 from app.grpc.clients.sso_client import SSOUserGRPCClient
-from app.core.messaging.event_publisher import EventPublisher
+from app.core.messaging import EventPublisher
 
 # Schemas
 from app.modules.employees.schemas import EmployeeResponse

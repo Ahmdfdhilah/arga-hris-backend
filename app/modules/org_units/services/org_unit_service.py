@@ -11,7 +11,7 @@ from app.modules.org_units.schemas.responses import (
     BulkInsertResult,
 )
 from app.modules.org_units.schemas.requests import OrgUnitBulkItem
-from app.core.messaging.event_publisher import EventPublisher
+from app.core.messaging import EventPublisher
 
 from app.modules.org_units.use_cases.create_org_unit import CreateOrgUnitUseCase
 from app.modules.org_units.use_cases.update_org_unit import UpdateOrgUnitUseCase

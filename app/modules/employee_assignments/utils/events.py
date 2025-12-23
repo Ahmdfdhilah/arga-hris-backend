@@ -6,8 +6,10 @@ from typing import Dict, Any, Optional
 import logging
 
 from app.modules.employee_assignments.models.employee_assignment import EmployeeAssignment
-from app.core.messaging.event_publisher import event_publisher
-from app.core.messaging.events import EventType
+from datetime import datetime
+import uuid
+from app.core.messaging import event_publisher, DomainEvent
+from app.core.enums.event_type import EventType
 
 logger = logging.getLogger(__name__)
 
@@ -44,22 +46,18 @@ class AssignmentEventUtil:
         """
         try:
             event_data = AssignmentEventUtil.to_event_data(assignment)
-            event_data["event_action"] = event_action
-
-            # Map action to EventType
-            event_type_map = {
-                "created": EventType.CREATED,
-                "activated": EventType.UPDATED,
-                "cancelled": EventType.DELETED,
-                "expired": EventType.UPDATED,
-            }
-            event_type = event_type_map.get(event_action, EventType.UPDATED)
-
-            await event_publisher.publish_entity_event(
-                event_type=event_type,
+            
+            # Create standardized DomainEvent
+            event = DomainEvent(
                 entity_type="assignment",
+                event_action=event_action,
                 entity_id=assignment.id,
                 data=event_data,
+                timestamp=datetime.utcnow(),
+                source_service="hris",
+                correlation_id=str(uuid.uuid4())
             )
+
+            await event_publisher.publish(event)
         except Exception as e:
             logger.warning(f"Failed to publish assignment.{event_action} event: {e}")

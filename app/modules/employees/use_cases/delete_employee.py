@@ -4,7 +4,7 @@ import logging
 from app.modules.employees.repositories import EmployeeQueries, EmployeeCommands
 from app.modules.org_units.repositories import OrgUnitQueries
 from app.modules.users.users.repositories import UserCommands
-from app.core.messaging.event_publisher import EventPublisher
+from app.core.messaging import EventPublisher
 from app.grpc.clients.sso_client import SSOUserGRPCClient
 from app.core.exceptions import NotFoundException, BadRequestException
 

@@ -17,7 +17,7 @@ from app.modules.org_units.repositories import OrgUnitQueries
 from app.modules.users.users.repositories import UserQueries, UserCommands
 from app.modules.users.rbac.repositories.queries import RoleQueries
 from app.modules.employees.services.employee_service import EmployeeService
-from app.core.messaging.event_publisher import event_publisher
+from app.core.messaging import event_publisher
 from app.grpc.converters import employee_to_proto
 from app.core.exceptions import BadRequestException, NotFoundException
 
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 class EmployeeHandler(employee_pb2_grpc.EmployeeServiceServicer):
     """gRPC Handler for Employee master data operations."""
 
-    async def _get_service(self) -> Tuple[EmployeeService, AsyncSessionLocal]:
+    async def _get_service(self):
         """Create EmployeeService with all dependencies."""
         session = AsyncSessionLocal()
 

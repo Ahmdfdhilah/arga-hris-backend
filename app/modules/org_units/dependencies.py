@@ -8,7 +8,7 @@ from app.core.dependencies.database import PostgresDB
 from app.modules.org_units.repositories import OrgUnitQueries, OrgUnitCommands
 from app.modules.employees.repositories import EmployeeQueries, EmployeeCommands
 from app.modules.org_units.services.org_unit_service import OrgUnitService
-from app.core.messaging.event_publisher import EventPublisher, event_publisher
+from app.core.messaging import EventPublisher, event_publisher
 
 
 def get_org_unit_queries(db: PostgresDB) -> OrgUnitQueries:

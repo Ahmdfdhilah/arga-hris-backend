@@ -328,3 +328,20 @@ def setup_routers(app: FastAPI) -> None:
 ---
 
 **Ingat: Dokumen ini adalah "Hukum". Langgar aturan = Technical Debt.**
+
+---
+
+## 7. EVENT MESSAGING ARCHITECTURE
+
+*   **Standard**: Baca detail di `docs/event_message_standards.md`.
+*   **Directory**: `app/core/messaging/` (engine, types, publisher/, consumer/).
+*   **Topology**:
+    *   **WAJIB Declarative**: Define bindings di `app/modules/{module}/events/bindings.py`.
+    *   **Dilarang Hardcode**: Jangan `declare_queue` manual di code init.
+*   **Publishing**:
+    *   **DomainEvent**: Gunakan `app.core.messaging.types.DomainEvent`.
+    *   **Utils**: Publish via `utils/events.py` di setiap module (DRY).
+    *   **Fire-and-forget**: Gunakan `await event_publisher.publish()`, jangan blocking/raise error.
+*   **Consuming**:
+    *   **Idempotency**: Handler WAJIB idempotent (upsert/check-exist).
+    *   **Routing Key**: Format `{entity_type}.{action}` (e.g., `user.created`).

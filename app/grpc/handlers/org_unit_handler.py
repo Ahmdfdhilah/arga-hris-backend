@@ -14,7 +14,7 @@ from app.config.database import AsyncSessionLocal
 from app.modules.org_units.repositories import OrgUnitQueries, OrgUnitCommands
 from app.modules.employees.repositories import EmployeeQueries, EmployeeCommands
 from app.modules.org_units.services.org_unit_service import OrgUnitService
-from app.core.messaging.event_publisher import event_publisher
+from app.core.messaging import event_publisher
 from app.grpc.converters import org_unit_to_proto
 from app.core.exceptions import BadRequestException, NotFoundException
 
