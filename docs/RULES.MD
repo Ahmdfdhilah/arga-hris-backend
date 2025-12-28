@@ -1,580 +1,347 @@
-# PANDUAN IMPLEMENTASI BACKEND PYTHON (FASTAPI)
+# PANDUAN IMPLEMENTASI BACKEND (MERGED) - SINGLE SOURCE OF TRUTH
 
 ## PRINSIP UTAMA
-
-### 1. BAHASA & DOKUMENTASI
-- **SEMUA** error messages, docstrings, dan komentar dalam **Bahasa Indonesia**
-- Tidak ada emoji dalam code
-- Komentar hanya untuk logika kompleks, hindari komentar yang jelas dari code
-
-### 2. VERIFIKASI DOKUMENTASI
-- **WAJIB** cek dokumentasi resmi sebelum implementasi (FastAPI, SQLAlchemy, Pydantic, dll)
-- Jangan mengandalkan asumsi, verifikasi syntax dan pattern dari docs
-- Pastikan versi library yang digunakan sesuai dengan project
-
-### 3. KONSISTENSI DENGAN EXISTING CODEBASE
-- Selalu periksa `plans` atau dokumentasi arsitektur sebelum coding
-- Ikuti pattern yang sudah ada di module lain
-- Jika context hilang, tanyakan atau rujuk kembali ke dokumentasi project
+1.  **BAHASA**: Komentar & Error Message WAJIB Bahasa Indonesia.
+2.  **KONSISTENSI**: Ikuti pattern yang ada. Jangan "kreatif" sendiri.
+3.  **VERIFIKASI**: Cek dokumentasi resmi library sebelum asumsi.
+4.  **CHECKLIST**: Wajib self-check sebelum coding.
+5.  **CLEAN COMMENT**: Jangan komen verbose tidak perlu.
 
 ---
 
-## STRUKTUR MODULE
+## 1. PROJECT STRUCTURE
 
-```
-app/modules/{module_name}/
-├── models/
-│   └── {entity}.py              # SQLAlchemy models
-├── schemas/
-│   ├── requests.py              # Input schemas
-│   ├── responses.py             # Output schemas
-│   └── shared.py                # Shared schemas (opsional)
-├── repositories/
-│   └── {entity}_repository.py   # Database operations only
-├── services/
-│   └── {entity}_service.py      # Business logic + response building
-└── routers/
-    └── {entity}s.py             # API endpoints (nama plural)
-```
-
----
-
-## LAYER RESPONSIBILITIES
-
-### MODELS (SQLAlchemy)
-**Tanggung Jawab:** Definisi tabel database
-```python
-class Employee(Base):
-    __tablename__ = "employees"
-    
-    id = Column(Integer, primary_key=True)
-    name = Column(String(100), nullable=False)
-    email = Column(String(100), unique=True, nullable=False)
-```
-
-**Aturan:**
-- Gunakan type hints yang tepat
-- Definisikan relationships dengan jelas
-- Tambahkan indexes untuk query optimization
-
----
-
-### SCHEMAS (Pydantic)
-
-#### `requests.py` - Input Validation
-```python
-class EmployeeCreateRequest(BaseModel):
-    """Schema untuk membuat employee baru"""
-    name: str = Field(..., min_length=1, max_length=100)
-    email: EmailStr
-    
-    class Config:
-        from_attributes = True
+```bash
+arga-hris-backend/
+├── app/
+│   ├── main.py                         # Entry point (CLEAN - lihat section 1.1)
+│   ├── config/settings.py              # Env vars
+│   ├── core/                           # Shared Logic
+│   │   ├── exceptions/                 # Custom Exceptions semua error raise ambil dari sini
+│   │   ├── schemas/                    # BaseResponses semua response ambil dari sini
+│   │   ├── security/                   # RBAC & Auth
+│   │   ├── routers/                    # Router configuration
+│   │   │   ├── system.py              # Health check & root endpoints
+│   │   │   ├── routers.py             # Router registration setup
+│   │   │   └── __init__.py            # Export setup_routers
+│   │   ├── utils/                      # Global Helpers per use case agar atomic
+│   │   │   ├── lifespan.py            # Application lifespan management
+│   │   │   └── ...                    # Other utilities
+│   │   └── enums/                      # Global Enums per use case agar atomic
+│   │
+│   ├── middleware/                     # Middleware & Exception Handlers
+│   │   ├── setup.py                   # Centralized middleware setup
+│   │   ├── cors.py                    # CORS configuration
+│   │   ├── logging.py                 # Request logging middleware
+│   │   ├── error_handler.py           # Exception handlers
+│   │   └── __init__.py                # Export setup_middleware
+│   │
+│   └── modules/{module_name}/          # Domain Modules
+│       ├── models/                     # SQLAlchemy Models
+│       ├── schemas/                    # Pydantic DTOs
+│       │   ├── commands/               # Write Ops
+│       │   └── queries/                # Read Ops
+│       ├── use_cases/                  # Pure Business Logic (Atomic per usecase)
+│       ├── services/                   # Facade / Wrappers
+│       ├── utils/                      # Module-specific helpers
+│       ├── dependencies.py             # DI Definitions
+│       └── routers/                    # API Endpoints
+└── docs/RULES.MD                       # THIS FILE
 ```
 
-#### `responses.py` - Output Format
-```python
-class EmployeeResponse(BaseModel):
-    """Schema response employee"""
-    id: int
-    name: str
-    email: str
-    created_at: datetime
-    
-    class Config:
-        from_attributes = True
-```
+### 1.1 CLEAN MAIN.PY PATTERN (WAJIB)
 
-**Aturan:**
-- Request schemas: validasi ketat, gunakan `Field()` dengan constraints
-- Response schemas: include semua field yang akan dikembalikan
-- Gunakan `Optional[]` untuk field yang bisa null
-- Nested schemas untuk relasi atau JSON fields
+**PRINSIP**: `main.py` harus BERSIH dan RINGKAS (<50 baris), hanya orchestration.
 
----
-
-### REPOSITORIES - Database Layer
-**Tanggung Jawab:** HANYA operasi database, TIDAK ADA business logic
+**Struktur Wajib**:
 
 ```python
-class EmployeeRepository:
-    """Repository untuk operasi database Employee"""
-    
-    def __init__(self, db: AsyncSession):
-        self.db = db
-    
-    async def get_by_id(self, employee_id: int) -> Optional[Employee]:
-        """Ambil employee berdasarkan ID"""
-        result = await self.db.execute(
-            select(Employee).where(Employee.id == employee_id)
-        )
-        return result.scalar_one_or_none()
-    
-    async def create(self, employee: Employee) -> Employee:
-        """Simpan employee baru ke database"""
-        self.db.add(employee)
-        await self.db.commit()
-        await self.db.refresh(employee)
-        return employee
+"""
+FastAPI Application Entry Point
+"""
+
+from fastapi import FastAPI
+from app.config.settings import settings
+from app.core.utils.logging import setup_logging
+from app.core.utils.lifespan import lifespan
+from app.middleware import setup_middleware
+from app.core.routers import setup_routers
+
+# Setup logging
+setup_logging()
+
+# Initialize FastAPI app
+app = FastAPI(
+    title=settings.APP_NAME,
+    description="ARGA HRIS Service",
+    version=settings.APP_VERSION,
+    lifespan=lifespan,
+)
+
+# Setup middleware and exception handlers
+setup_middleware(app)
+
+# Setup routers
+setup_routers(app)
 ```
 
-**Aturan:**
-- Method async dengan `AsyncSession`
-- Return type yang jelas (model atau `Optional[Model]`)
-- Commit & refresh untuk operasi write
-- Tidak ada exception handling business logic
+**Rules**:
+1. **TIDAK BOLEH** ada logic bisnis atau konfigurasi detail di `main.py`
+2. **WAJIB** pisahkan lifespan ke `app/core/utils/lifespan.py`
+3. **WAJIB** pisahkan middleware setup ke `app/middleware/setup.py`
+4. **WAJIB** pisahkan router registration ke `app/core/routers/routers.py`
+5. Health check & root endpoint HARUS di `app/core/routers/system.py`
+
+**File Organization**:
+- `app/core/utils/lifespan.py`: Startup/shutdown events (scheduler, gRPC, RabbitMQ)
+- `app/middleware/setup.py`: CORS, logging, exception handlers registration
+- `app/core/routers/routers.py`: All router includes with prefixes and tags
+- `app/core/routers/system.py`: Root (/) dan health check (/health) endpoints
 
 ---
 
-### SERVICES - Business Logic Layer
-**Tanggung Jawab:** Business logic + validation + response building
+## 2. LAYER RESPONSIBILITIES (STRICT)
+
+### A. MODELS (`models/*.py`)
+*   **Role**: Definisi Tabel Database (SQLAlchemy).
+*   **Rule**: Type hints wajb. Relationships harus jelas.
+
+### B. REPOSITORIES (`repositories/*`)
+*   **Role**: Akses Database SAJA (No Business Logic).
+*   **Structure**:
+    *   `queries/`: Read operations (`get`, `list`, `count`). Return `Optional[Model]` atau `List[Model]`.
+    *   `commands/`: Write operations (`create`, `update`, `delete`). Commit & Refresh di sini.
+*   **Naming**: `UserQueries`, `UserCommands`.
+
+### C. USE CASES (`use_cases/*.py`)
+*   **Role**: **PURE BUSINESS LOGIC**. Enkapsulasi SATU proses bisnis.
+*   **Rules**:
+    *   **NO HTTP**: Tidak boleh import `fastapi`.
+    *   **NO DB**: Akses DB hanya via Repository.
+    *   **Atomic**: 1 File = 1 Use Case = 1 Public Method (`execute`).
+    *   **Input/Output**: DTO (Pydantic Schema) atau Entity.
+    *   **CLEAN**: Use Case hanya berisi orchestration. Helper logic pindah ke `utils/`.
+    *   **NO PRIVATE METHODS**: Jangan buat `_helper_method()` di Use Case. Pindahkan ke Utils.
+*   **Example**: `app/modules/employees/use_cases/create_employee.py`
+
+```python
+class CreateEmployeeUseCase:
+    def __init__(self, repo: EmployeeCommands):
+        self.repo = repo
+
+    async def execute(self, data: CreateEmployeeDTO) -> Employee:
+        if data.age < 17:
+             raise BadRequestException("Belum cukup umur")
+        return await self.repo.create(data)
+```
+
+### C.1 UTILS (`utils/*.py`) - DRY PATTERN (WAJIB)
+
+**PRINSIP**: Ekstrak helper methods dari Use Cases ke Utils agar reusable.
+
+**Struktur Utils Per Module**:
+```
+app/modules/{module_name}/utils/
+├── __init__.py          # Export semua util classes
+├── events.py            # EventUtil: publish domain events
+├── validators.py        # ValidationUtil: business validations
+└── {domain}_helper.py   # Specific helpers (e.g., path_calculator.py)
+```
+
+**Pattern**:
+```python
+# utils/events.py
+class OrgUnitEventUtil:
+    @staticmethod
+    def to_event_data(org_unit: OrgUnit) -> Dict[str, Any]:
+        return {"id": org_unit.id, "name": org_unit.name, ...}
+    
+    @staticmethod
+    async def publish(event_publisher, event_type: str, org_unit: OrgUnit) -> None:
+        if not event_publisher:
+            return
+        data = OrgUnitEventUtil.to_event_data(org_unit)
+        await event_publisher.publish_org_unit_updated(org_unit.id, data)
+```
+
+**Use Case SEBELUM (❌ SALAH)**:
+```python
+class UpdateOrgUnitUseCase:
+    async def execute(self, ...):
+        # ... logic
+        await self._recalculate_path(org_unit)
+        await self._handle_head_change(...)
+        await self._publish_event("updated", org_unit)
+    
+    async def _recalculate_path(self, org_unit):  # ❌ Private method
+        ...
+    async def _handle_head_change(self, ...):     # ❌ Private method
+        ...
+    async def _publish_event(self, ...):          # ❌ Private method
+        ...
+```
+
+**Use Case SESUDAH (✅ BENAR)**:
+```python
+from app.modules.org_units.utils import OrgUnitPathUtil, OrgUnitHeadUtil, OrgUnitEventUtil
+
+class UpdateOrgUnitUseCase:
+    async def execute(self, ...):
+        # ... validation & field updates
+        await self.commands.update(org_unit)
+        
+        if parent_changed:
+            await OrgUnitPathUtil.recalculate_path(self.queries, self.commands, org_unit)
+        
+        if head_changed:
+            await OrgUnitHeadUtil.handle_head_change(...)
+        
+        await OrgUnitEventUtil.publish(self.event_publisher, "updated", org_unit)
+        return org_unit
+```
+
+**Benefits**:
+- ✅ Use Case tetap clean (~50% lebih sedikit lines)
+- ✅ Utils bisa dipakai di Use Case lain
+- ✅ Easier to test (utils bisa di-unit test terpisah)
+- ✅ DRY - tidak ada duplikasi code
+
+### D. SERVICES / FACADE (`services/*.py`)
+*   **Role**: **ORCHESTRATOR / WRAPPER**.
+*   **Rules**:
+    *   Hanya me-wire repository ke Use Cases.
+    *   Convert Request -> DTO -> UseCase -> DTO -> Response.
+    *   Menangani Formatting Response (Standard Response Wrapper).
+*   **Naming**: `{Entity}Service` (e.g., `EmployeeService`).
 
 ```python
 class EmployeeService:
-    """Service untuk business logic Employee"""
+    def __init__(self, queries, commands):
+        self.create_uc = CreateEmployeeUseCase(commands)
     
-    def __init__(self, employee_repo: EmployeeRepository):
-        self.employee_repo = employee_repo
+    async def create(self, request: CreateRequest) -> DataResponse:
+        dto = request.to_dto()
+        result = await self.create_uc.execute(dto)
+        return success_data_response(data=result)
+```
+
+### E. ROUTERS (`routers/*.py`)
+*   **Role**: HTTP Gatekeeper.
+*   **Rules**:
+    *   **RBAC**: Wajib `@require_permission`.
+    *   **DI**: Inject Service Facade.
+    *   **No Logic**: Dilarang ada logic `if/else` bisnis di sini.
+    *   Return hasil dari Service langsung.
+
+**Router Declaration Format (WAJIB KONSISTEN)**:
+
+```python
+# Format WAJIB untuk setiap router file
+router = APIRouter(prefix="/module-name", tags=["Module Display Name"])
+```
+
+**Contoh yang benar**:
+
+| Module | Declaration |
+|--------|-------------|
+| auth | `APIRouter(prefix="/auth", tags=["Authentication"])` |
+| employees | `APIRouter(prefix="/employees", tags=["Employees"])` |
+| attendances | `APIRouter(prefix="/attendances", tags=["Attendances"])` |
+| leave-requests | `APIRouter(prefix="/leave-requests", tags=["Leave Requests"])` |
+| org-units | `APIRouter(prefix="/org-units", tags=["Organization Units"])` |
+| assignments | `APIRouter(prefix="/assignments", tags=["Employee Assignments"])` |
+
+**Centralized Router Registration** (`app/core/routers/routers.py`):
+
+```python
+def setup_routers(app: FastAPI) -> None:
+    app.include_router(system_router, tags=["System"])
     
-    async def create_employee(
-        self,
-        request: EmployeeCreateRequest
-    ) -> Dict[str, Any]:
-        """
-        Membuat employee baru
-        
-        Args:
-            request: Data employee yang akan dibuat
-            
-        Returns:
-            Response sukses dengan data employee
-            
-        Raises:
-            ConflictException: Jika email sudah terdaftar
-        """
-        # Validasi business rules
-        existing = await self.employee_repo.get_by_email(request.email)
-        if existing:
-            raise ConflictException(
-                f"Employee dengan email {request.email} sudah terdaftar"
-            )
-        
-        # Proses data
-        employee = Employee(**request.model_dump())
-        created = await self.employee_repo.create(employee)
-        
-        # Build response
-        response = EmployeeResponse.from_orm(created)
-        return success_data_response(
-            message="Employee berhasil dibuat",
-            data=response.model_dump()
-        )
-```
-
-**Aturan CRITICAL:**
-- **Return type HARUS `Dict[str, Any]`** (bukan Pydantic model)
-- **Response building di SERVICE, bukan di router**
-- Dependency injection via `__init__`
-- Semua validasi business logic di sini
-- Exception dengan pesan Bahasa Indonesia
-- Docstring lengkap dengan Args, Returns, Raises
-
----
-
-### ROUTERS - API Endpoint Layer
-**Tanggung Jawab:** Routing + dependency injection + permission check
-
-```python
-from app.core.security.rbac import require_permission
-
-router = APIRouter(prefix="/employees", tags=["Employees"])
-
-def get_employee_service(
-    db: AsyncSession = Depends(get_db)
-) -> EmployeeService:
-    """Dependency injection untuk EmployeeService"""
-    repo = EmployeeRepository(db)
-    return EmployeeService(repo)
-
-@router.post("", status_code=201)
-@require_permission("employee.create")
-async def create_employee(
-    request: EmployeeCreateRequest,
-    service: EmployeeService = Depends(get_employee_service),
-    current_user: Dict = Depends(get_current_user)
-):
-    """
-    Membuat employee baru
+    routers = [
+        auth.router,
+        employees.router,
+        # ... other routers
+    ]
     
-    **Permission required:** employee.create
-    """
-    return await service.create_employee(request)
+    for router in routers:
+        app.include_router(router, prefix=settings.API_PREFIX)
 ```
 
-**Aturan:**
-- **Langsung return hasil service** (jangan build response lagi)
-- Semua endpoints WAJIB ada RBAC decorator
-- Dependency injection untuk service
-- Docstring dengan permission required
-- Status code sesuai operation (201 untuk create)
+**Rules**:
+1. Setiap router WAJIB declare `prefix` dan `tags` di file router masing-masing
+2. Centralized registration HANYA menambahkan API prefix (`/api/v1`)
+3. Tags di router file akan otomatis muncul di Swagger docs
 
 ---
 
-## RESPONSE BUILDING
+## 3. SCHEMAS (DTOs)
 
-### Location: SERVICE LAYER (WAJIB)
+*   `requests.py`: Input validasi. (`CreateUserRequest`, `UpdateUserRequest`)
+*   `responses.py`: Output schema. (`UserResponse`, `UserListItemResponse`)
+*   `shared.py`: Enum atau struct yang dipakai di kedua file.
 
-```python
-from app.core.schemas.helpers import success_data_response, paginated_data_response
-
-# Single data
-return success_data_response(
-    message="Data berhasil diambil",
-    data=response.model_dump()
-)
-
-# Paginated
-return paginated_data_response(
-    message="Daftar data berhasil diambil",
-    data=items_data,
-    page=page,
-    limit=limit,
-    total_items=total_items
-)
-```
-
-**SALAH jika response building di router!**
+**Rule**: Pisahkan `DetailResponse` (semua field) dan `ListItemResponse` (ringkas) untuk performa list.
 
 ---
 
-## RBAC (ROLE-BASED ACCESS CONTROL)
+## 4. NAMING CONVENTIONS
 
-### Permission Naming Convention
-Format: `{resource}.{action}[_scope]`
-
-```python
-# Examples
-'employee.read'           # Baca semua employee
-'employee.read_own'       # Baca data sendiri
-'employee.read_team'      # Baca data team
-'attendance.create'       # Buat attendance
-'leave_request.approve'   # Approve cuti
-```
-
-### Implementation
-
-```python
-# Permission-based (PREFERRED)
-@require_permission("employee.read")
-async def get_employee(...):
-    pass
-
-# Role-based (untuk super admin only)
-@require_role("super_admin")
-async def delete_employee(...):
-    pass
-
-# Multiple roles
-@require_role(["hr_admin", "super_admin"])
-async def system_config(...):
-    pass
-```
-
-**Aturan:**
-- **SEMUA endpoints WAJIB ada RBAC** (kecuali public)
-- Prioritas gunakan `@require_permission`
-- `@require_role` hanya untuk operasi super admin
-- Dokumentasikan permission di docstring
+| Item | Format | Contoh |
+| :--- | :--- | :--- |
+| File | `snake_case` | `user_service.py` |
+| Class | `PascalCase` | `UserService` |
+| Method | `snake_case` | `get_by_id` |
+| Variable | `snake_case` | `user_data` |
+| Constant | `UPPER_SNAKE` | `MAX_UPLOAD_SIZE` |
+| URL | `kebab-case` | `/users/upload-photo` |
+| Table | `snake_case` (plural) | `users`, `org_units` |
 
 ---
 
-## EXCEPTION HANDLING
+## 5. CHECKLIST SEBELUM CODING (WAJIB)
 
-### Available Exceptions
-```python
-from app.core.exceptions import (
-    BadRequestException,      # 400 - Input tidak valid
-    UnauthorizedException,    # 401 - Belum login
-    ForbiddenException,       # 403 - Tidak punya akses
-    NotFoundException,        # 404 - Data tidak ditemukan
-    ConflictException,        # 409 - Duplikasi/konflik
-    FileValidationError,      # 400 - File tidak valid
-)
-```
+### ✅ Before Creating Logic
+- [ ] Cek `utils/` (module level & core level). Jangan buat duplicate helper.
+- [ ] Cek Service lain. Jangan duplikasi logic yang sama.
+- [ ] Pastikan Repository (Query/Command) sudah ada.
 
-### Usage
-```python
-# Validation
-if not value:
-    raise BadRequestException("Field tidak boleh kosong")
+### ✅ Before Creating Endpoint
+- [ ] Cek method (GET vs POST vs PATCH). Gunakan PATCH untuk update partial.
+- [ ] Static route (`/me`) harus di atas dynamic route (`/{id}`).
+- [ ] Pastikan `@require_permission` sesuai.
 
-# Not found
-if not data:
-    raise NotFoundException(f"Data dengan ID {id} tidak ditemukan")
-
-# Conflict
-if existing:
-    raise ConflictException(f"Email {email} sudah terdaftar")
-```
-
-**WAJIB:** Semua pesan dalam Bahasa Indonesia
+### ✅ Code Quality
+- [ ] Type Hints **WAJIB** di function args & return.
+- [ ] Tidak ada `print()`, gunakan `logger`.
+- [ ] Tidak ada hardcoded strings/magic numbers.
+- [ ] Error handling pakai `app.core.exceptions`.
 
 ---
 
-## FILE UPLOAD HANDLING
+## 6. GCP STORAGE & FILES
 
-### Gunakan Utility Functions
-```python
-from app.core.utils import upload_file_to_gcp, delete_file_from_gcp_url
-
-# Upload
-file_url = await upload_file_to_gcp(
-    file=uploaded_file,
-    entity_type="employees",
-    entity_id=employee.id,
-    subfolder="profile",
-    allowed_types=settings.ALLOWED_IMAGE_TYPES,
-    max_size=settings.MAX_IMAGE_SIZE
-)
-
-# Delete
-if old_file_url:
-    delete_file_from_gcp_url(old_file_url)
-```
-
-**JANGAN** buat method `_upload_*` atau `_delete_*` custom!
+*   **Bucket**: Private, akses via Signed URL.
+*   **DB Storage**: Simpan **PATH** (bukan URL). URL expired dalam 7 hari.
+*   **Upload**: Gunakan `app.core.utils.upload_file_to_gcp`.
+*   **Validation**: Selalu validasi extension dan size di Router/Service.
 
 ---
 
-## JSON FIELD OPERATIONS
-
-### Increment Logic (BUKAN Replace)
-```python
-# BENAR - Increment
-current_data = entity.metrics or {}
-increment_value = request.weekly_inc
-
-current_weekly = current_data.get("weekly_inc", 0.0)
-current_data["weekly_inc"] = current_weekly + increment_value
-
-current_total = current_data.get("total", 0.0)
-current_data["total"] = current_total + increment_value
-
-entity.metrics = current_data
-
-# SALAH - Replace
-entity.metrics = {"weekly_inc": request.weekly_inc}  #  Data lama hilang
-```
+**Ingat: Dokumen ini adalah "Hukum". Langgar aturan = Technical Debt.**
 
 ---
 
-## IMPORTS ORGANIZATION
+## 7. EVENT MESSAGING ARCHITECTURE
 
-```python
-# 1. Standard library
-from typing import Optional, Dict, Any, List
-from datetime import datetime
-
-# 2. Third-party
-from fastapi import APIRouter, Depends, UploadFile
-from pydantic import BaseModel, Field
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-# 3. Local - models
-from app.modules.employees.models import Employee
-
-# 4. Local - repositories
-from app.modules.employees.repositories import EmployeeRepository
-
-# 5. Local - schemas
-from app.modules.employees.schemas import (
-    EmployeeCreateRequest,
-    EmployeeResponse
-)
-
-# 6. Local - core
-from app.core.schemas.helpers import success_data_response
-from app.core.exceptions import NotFoundException
-from app.core.security.rbac import require_permission
-```
-
----
-
-## VALIDATION PATTERNS
-
-### Input Validation
-```python
-# Enum validation
-if request.status not in ["active", "inactive"]:
-    raise BadRequestException(
-        "Status tidak valid. Harus 'active' atau 'inactive'"
-    )
-
-# Range validation
-if page < 1:
-    raise BadRequestException("Halaman harus lebih besar dari 0")
-
-if limit < 1 or limit > 100:
-    raise BadRequestException("Limit harus antara 1 dan 100")
-
-# Existence check
-existing = await self.repo.get_by_field(value)
-if existing:
-    raise ConflictException(f"Data dengan {field} sudah ada")
-```
-
----
-
-## CHECKLIST SEBELUM COMMIT
-
-**Struktur:**
-- [ ] Folder structure sesuai standard
-- [ ] Schemas terpisah: requests.py & responses.py
-- [ ] Imports terorganisir dengan benar
-
-**Service Layer:**
-- [ ] Dependency injection via `__init__`
-- [ ] Return type `Dict[str, Any]`
-- [ ] Response building di SERVICE (bukan router)
-- [ ] Validasi business logic lengkap
-- [ ] Docstring lengkap (Args, Returns, Raises)
-
-**Router Layer:**
-- [ ] Langsung return hasil service
-- [ ] SEMUA endpoints punya RBAC decorator
-- [ ] Permission documented di docstring
-- [ ] Dependency injection untuk service
-
-**RBAC:**
-- [ ] Permission naming sesuai convention
-- [ ] Gunakan `@require_permission` untuk regular ops
-- [ ] `@require_role` hanya untuk super admin ops
-
-**Kualitas Code:**
-- [ ] Tidak ada emoji
-- [ ] Semua pesan dalam Bahasa Indonesia
-- [ ] Tidak ada komentar yang tidak perlu
-- [ ] File upload gunakan utility functions
-- [ ] Exception handling proper
-
-**Testing:**
-- [ ] Test create, read, update operations
-- [ ] Test validation errors
-- [ ] Test RBAC restrictions
-- [ ] Test edge cases
-
----
-
-## ANTI-PATTERNS (JANGAN LAKUKAN!)
-
- **Response building di router**
-```python
-# SALAH
-@router.get("/")
-async def list_items(service: ServiceDep):
-    items = await service.list_items()
-    return success_data_response("Success", items)  # 
-```
-
- **Response building di service**
-```python
-# BENAR
-async def list_items(self) -> Dict[str, Any]:
-    items = await self.repo.list_all()
-    return success_data_response("Success", items)  # 
-```
-
----
-
- **Service return Pydantic model**
-```python
-# SALAH
-async def get_item(self) -> ItemResponse:  # 
-    return ItemResponse.from_orm(item)
-```
-
- **Service return Dict[str, Any]**
-```python
-# BENAR
-async def get_item(self) -> Dict[str, Any]:  # 
-    response = ItemResponse.from_orm(item)
-    return success_data_response("Success", response.model_dump())
-```
-
----
-
- **Business logic di repository**
-```python
-# SALAH - Repository
-async def create(self, data: dict) -> Employee:
-    if data["age"] < 18:  #  Business logic di repo
-        raise BadRequestException("Umur minimal 18")
-    # ...
-```
-
- **Business logic di service**
-```python
-# BENAR - Service
-async def create_employee(self, request: CreateRequest):
-    if request.age < 18:  #  Business logic di service
-        raise BadRequestException("Umur minimal 18")
-    # ...
-```
-
----
-
- **Endpoint tanpa RBAC**
-```python
-# SALAH
-@router.get("/")
-async def list_items(...):  #  Tidak ada RBAC
-    pass
-```
-
- **Semua endpoint dengan RBAC**
-```python
-# BENAR
-@router.get("/")
-@require_permission("item.read")  # 
-async def list_items(...):
-    pass
-```
-
----
-
-## REFERENSI CEPAT
-
-### Common Patterns
-- **Pagination:** `page` (start from 1), `limit`, `total_items`
-- **Filtering:** Optional parameters di repository & service
-- **Sorting:** `order_by`, `order_direction` ("asc"/"desc")
-- **Search:** `search` parameter, gunakan `ilike` untuk case-insensitive
-
-### Response Format
-```python
-# Success
-{
-    "status": "success",
-    "message": "...",
-    "data": {...}
-}
-
-# Paginated
-{
-    "status": "success",
-    "message": "...",
-    "data": [...],
-    "meta": {
-        "page": 1,
-        "limit": 10,
-        "total_items": 100,
-        "total_pages": 10
-    }
-}
-```
-
----
-
-**Dokumen ini adalah single source of truth untuk implementasi backend.**  
-**Jika ragu, rujuk dokumen ini atau tanyakan sebelum implementasi.**
+*   **Standard**: Baca detail di `docs/event_message_standards.md`.
+*   **Directory**: `app/core/messaging/` (engine, types, publisher/, consumer/).
+*   **Topology**:
+    *   **WAJIB Declarative**: Define bindings di `app/modules/{module}/events/bindings.py`.
+    *   **Dilarang Hardcode**: Jangan `declare_queue` manual di code init.
+*   **Publishing**:
+    *   **DomainEvent**: Gunakan `app.core.messaging.types.DomainEvent`.
+    *   **Utils**: Publish via `utils/events.py` di setiap module (DRY).
+    *   **Fire-and-forget**: Gunakan `await event_publisher.publish()`, jangan blocking/raise error.
+*   **Consuming**:
+    *   **Idempotency**: Handler WAJIB idempotent (upsert/check-exist).
+    *   **Routing Key**: Format `{entity_type}.{action}` (e.g., `user.created`).

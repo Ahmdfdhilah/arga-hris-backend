@@ -57,7 +57,7 @@ def translate_validation_error(error: ErrorDetails) -> str:
             # Jika format gagal, coba tanpa context
             try:
                 return template.format(field=field)
-            except:
+            except Exception:
                 pass
     
     # Fallback ke message default dengan field name

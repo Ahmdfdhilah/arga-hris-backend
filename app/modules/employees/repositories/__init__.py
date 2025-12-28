@@ -1,3 +1,7 @@
-from app.modules.employees.repositories.employee_repository import EmployeeRepository
+from app.modules.employees.repositories.queries import EmployeeQueries
+from app.modules.employees.repositories.commands import EmployeeCommands
 
-__all__ = ["EmployeeRepository"]
+__all__ = [
+    "EmployeeQueries",
+    "EmployeeCommands",
+]

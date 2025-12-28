@@ -1,9 +1,31 @@
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import datetime, timezone, date, timedelta
+from typing import Tuple
+
+
+def get_date_range_from_type(period_type: str) -> Tuple[date, date]:
+    """
+    Get start and end date based on period type (today/weekly/monthly).
+    Raises ValueError if type is unknown.
+    """
+    today = date.today()
+    if period_type == "today":
+        return (today, today)
+    elif period_type == "weekly":
+        # Assuming start of week is Monday
+        start_of_week = today - timedelta(days=today.weekday())
+        return (start_of_week, today)
+    elif period_type == "monthly":
+        start_of_month = today.replace(day=1)
+        return (start_of_month, today)
+    else:
+        raise ValueError(f"Unknown period type: {period_type}")
 
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+get_utc_now = utcnow
 
 
 def to_timestamp(dt: datetime) -> int:
@@ -33,8 +55,3 @@ def is_future(dt: datetime) -> bool:
 def get_iso_timestamp() -> str:
     """Get current timestamp in ISO 8601 format with timezone"""
     return datetime.now(timezone.utc).isoformat()
-
-
-def get_utc_now() -> datetime:
-    """Get current UTC datetime"""
-    return datetime.now(timezone.utc)

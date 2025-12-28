@@ -3,14 +3,14 @@ Employee Response Schemas
 """
 
 from pydantic import BaseModel
-from typing import Optional, Dict, List
+from typing import Optional, List
 from datetime import datetime
 
 
 class UserNestedResponse(BaseModel):
     """User profile data (synced from SSO)"""
-    id: int
-    sso_id: str
+
+    id: str  # SSO UUID
     name: str
     email: Optional[str] = None
     phone: Optional[str] = None
@@ -24,6 +24,7 @@ class UserNestedResponse(BaseModel):
 
 class EmployeeOrgUnitNestedResponse(BaseModel):
     """Nested org unit"""
+
     id: int
     code: str
     name: str
@@ -35,8 +36,10 @@ class EmployeeOrgUnitNestedResponse(BaseModel):
 
 class EmployeeSupervisorNestedResponse(BaseModel):
     """Nested supervisor"""
+
     id: int
-    number: str
+    code: str
+    name: Optional[str] = None
     position: Optional[str] = None
     user: Optional[UserNestedResponse] = None
 
@@ -46,17 +49,23 @@ class EmployeeSupervisorNestedResponse(BaseModel):
 
 class EmployeeResponse(BaseModel):
     """Employee with nested user profile"""
+
     id: int
-    user_id: Optional[int] = None
-    number: str
+    user_id: Optional[str] = None
+    code: str
+    name: Optional[str] = None  # Denormalized from user
+    email: Optional[str] = None  # Denormalized from user
     position: Optional[str] = None
-    type: Optional[str] = None
+    site: Optional[str] = None  # on_site, hybrid, ho
+    type: Optional[str] = None  # fulltime, contract, intern
     org_unit_id: Optional[int] = None
     supervisor_id: Optional[int] = None
     is_active: bool = True
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
-    
+    deleted_at: Optional[datetime] = None
+    deleted_by: Optional[str] = None
+
     user: Optional[UserNestedResponse] = None
     org_unit: Optional[EmployeeOrgUnitNestedResponse] = None
     supervisor: Optional[EmployeeSupervisorNestedResponse] = None
@@ -70,6 +79,7 @@ EmployeeSupervisorNestedResponse.model_rebuild()
 
 class BulkInsertResult(BaseModel):
     """Bulk insert result"""
+
     total_items: int
     success_count: int
     error_count: int

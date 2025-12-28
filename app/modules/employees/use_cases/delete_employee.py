@@ -1,0 +1,88 @@
+from typing import Optional, Dict, Any
+import logging
+
+from app.modules.employees.repositories import EmployeeQueries, EmployeeCommands
+from app.modules.org_units.repositories import OrgUnitQueries
+from app.modules.users.users.repositories import UserCommands
+from app.core.messaging import EventPublisher
+from app.grpc.clients.sso_client import SSOUserGRPCClient
+from app.core.exceptions import NotFoundException, BadRequestException
+
+# Utils
+from app.modules.employees.utils.sso_sync import SSOSyncUtil
+from app.modules.employees.utils.events import EmployeeEventUtil
+
+logger = logging.getLogger(__name__)
+
+
+class DeleteEmployeeUseCase:
+    """Use Case for soft-deleting an employee."""
+
+    def __init__(
+        self,
+        queries: EmployeeQueries,
+        commands: EmployeeCommands,
+        org_unit_queries: OrgUnitQueries,
+        user_commands: UserCommands,
+        sso_client: SSOUserGRPCClient,
+        event_publisher: Optional[EventPublisher] = None,
+    ):
+        self.queries = queries
+        self.commands = commands
+        self.org_unit_queries = org_unit_queries
+        self.user_commands = user_commands
+        self.sso_client = sso_client
+        self.event_publisher = event_publisher
+
+    async def execute(self, employee_id: int, deleted_by: str) -> Dict[str, Any]:
+        """
+        Execute the delete employee use case.
+        """
+        employee = await self.queries.get_by_id(employee_id)
+        if not employee:
+            raise NotFoundException(f"Employee with ID {employee_id} not found")
+
+        is_head = await self.org_unit_queries.is_head_of_any_unit(employee_id)
+        if is_head:
+            raise BadRequestException(
+                "Cannot delete: employee is org unit head. Reassign first."
+            )
+
+        if employee.user_id:
+            logger.info(f"Calling SSO to remove user {employee.user_id} from apps...")
+            await SSOSyncUtil.delete_sso_user(
+                sso_client=self.sso_client,
+                user_commands=self.user_commands,
+                user_id=employee.user_id,
+            )
+            logger.info(f"SSO sync completed for user {employee.user_id}")
+        else:
+            logger.warning(f"Employee {employee_id} has no user_id, skipping SSO sync")
+
+        subordinates = await self.queries.get_all_by_supervisor(employee_id)
+        subordinate_ids = []
+        if subordinates:
+            subordinate_ids = [s.id for s in subordinates]
+            await self.commands.bulk_update_supervisor(
+                subordinate_ids, employee.supervisor_id, deleted_by
+            )
+
+        await self.commands.delete(employee_id, deleted_by)
+
+        deleted = await self.queries.get_by_id_with_deleted(employee_id)
+        if self.event_publisher:
+            await EmployeeEventUtil.publish(self.event_publisher, "deleted", deleted)
+
+        if self.event_publisher and subordinate_ids:
+            logger.info(f"Publishing employee.updated for {len(subordinate_ids)} reassigned subordinates")
+            for subordinate_id in subordinate_ids:
+                updated_subordinate = await self.queries.get_by_id(subordinate_id)
+                if updated_subordinate:
+                    await EmployeeEventUtil.publish(
+                        self.event_publisher,
+                        "updated",
+                        updated_subordinate
+                    )
+                    logger.debug(f"Published employee.updated for subordinate {subordinate_id}")
+
+        return {"success": True}

@@ -7,7 +7,7 @@ FastAPI dependency injection for event publisher.
 from typing import Annotated
 from fastapi import Depends
 
-from app.core.messaging.event_publisher import EventPublisher, event_publisher
+from app.core.messaging.publisher.service import EventPublisher, event_publisher
 
 
 def get_event_publisher() -> EventPublisher:

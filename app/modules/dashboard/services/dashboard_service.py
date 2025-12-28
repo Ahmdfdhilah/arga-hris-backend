@@ -1,7 +1,8 @@
 """
 Dashboard service for multi-role dashboard aggregation
 """
-from typing import List, Optional, Dict, Any
+
+from typing import List, Optional
 from datetime import date, datetime, timedelta
 from app.core.schemas.current_user import CurrentUser
 from app.modules.dashboard.schemas.responses import (
@@ -14,8 +15,8 @@ from app.modules.dashboard.schemas.responses import (
     AttendanceStatusToday,
 )
 from app.modules.dashboard.repositories.dashboard_repository import DashboardRepository
-from app.external_clients.grpc.employee_client import EmployeeGRPCClient
-from app.external_clients.grpc.org_unit_client import OrgUnitGRPCClient
+from app.modules.employees.repositories import EmployeeQueries
+from app.modules.org_units.repositories import OrgUnitQueries
 
 
 class DashboardService:
@@ -24,17 +25,63 @@ class DashboardService:
     def __init__(
         self,
         dashboard_repo: DashboardRepository,
-        employee_client: EmployeeGRPCClient,
-        org_unit_client: OrgUnitGRPCClient,
+        employee_queries: EmployeeQueries,
+        org_unit_queries: OrgUnitQueries,
     ):
         self.dashboard_repo = dashboard_repo
-        self.employee_client = employee_client
-        self.org_unit_client = org_unit_client
+        self.employee_queries = employee_queries
+        self.org_unit_queries = org_unit_queries
+
+    async def _get_employee_dict(self, employee_id: int):
+        emp = await self.employee_queries.get_by_id(employee_id)
+        if not emp:
+            return None
+        return {
+            "id": emp.id,
+            "name": emp.user.name if emp.user else None,
+            "employee_number": emp.code,
+            "org_unit_id": emp.org_unit_id,
+            "position": emp.position,
+        }
+
+    async def _list_employees_dict(
+        self, page=1, limit=100, org_unit_id=None, is_active=True
+    ):
+        skip = (page - 1) * limit
+        employees, total = await self.employee_queries.list(
+            org_unit_id=org_unit_id, is_active=is_active, limit=limit, skip=skip
+        )
+        total_pages = (total + limit - 1) // limit if total > 0 else 0
+        return {
+            "employees": [
+                {"id": e.id, "name": e.user.name if e.user else None} for e in employees
+            ],
+            "pagination": {
+                "page": page,
+                "limit": limit,
+                "total_items": total,
+                "total_pages": total_pages,
+            },
+        }
+
+    async def _get_org_unit_dict(self, org_unit_id: int):
+        ou = await self.org_unit_queries.get_by_id(org_unit_id)
+        if not ou:
+            return None
+        return {"id": ou.id, "name": ou.name}
+
+    async def _list_org_units_dict(self, page=1, limit=100):
+        skip = (page - 1) * limit
+        org_units, total = await self.org_unit_queries.list(skip=skip, limit=limit)
+        return {
+            "org_units": [
+                {"id": ou.id, "name": ou.name, "head_id": ou.head_id}
+                for ou in org_units
+            ]
+        }
 
     async def get_dashboard_summary(
-        self,
-        current_user: CurrentUser,
-        target_date: Optional[date] = None
+        self, current_user: CurrentUser, target_date: Optional[date] = None
     ) -> DashboardSummary:
         """
         Get complete dashboard summary for user based on all their roles.
@@ -95,9 +142,7 @@ class DashboardService:
         )
 
     async def _get_employee_widget(
-        self,
-        current_user: CurrentUser,
-        target_date: date
+        self, current_user: CurrentUser, target_date: date
     ) -> EmployeeWidget:
         """Get personal metrics for employee role"""
 
@@ -116,7 +161,7 @@ class DashboardService:
 
         # Fetch employee data from gRPC (workforce service)
         try:
-            employee_data = await self.employee_client.get_employee(current_user.employee_id)
+            employee_data = await self._get_employee_dict(current_user.employee_id)
         except Exception as e:
             # Fallback if gRPC call fails
             return EmployeeWidget(
@@ -131,11 +176,15 @@ class DashboardService:
             )
 
         # Get today's attendance from local DB
-        attendance_today = await self._get_today_attendance(current_user.employee_id, target_date)
+        attendance_today = await self._get_today_attendance(
+            current_user.employee_id, target_date
+        )
 
         # Get monthly attendance stats from local DB
         month_start = target_date.replace(day=1)
-        month_end = (month_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+        month_end = (month_start + timedelta(days=32)).replace(day=1) - timedelta(
+            days=1
+        )
 
         total_present_days = await self.dashboard_repo.count_monthly_attendance(
             current_user.employee_id, month_start, month_end
@@ -160,7 +209,7 @@ class DashboardService:
         department_name = None
         if employee_data.get("org_unit_id"):
             try:
-                org_unit_data = await self.org_unit_client.get_org_unit(
+                org_unit_data = await self._get_org_unit_dict(
                     employee_data["org_unit_id"]
                 )
                 department_name = org_unit_data.get("name")
@@ -182,24 +231,26 @@ class DashboardService:
         )
 
     async def _get_hr_admin_widget(
-        self,
-        current_user: CurrentUser,
-        target_date: date
+        self, current_user: CurrentUser, target_date: date
     ) -> HRAdminWidget:
         """Get HR admin metrics for company-wide overview"""
 
         # Fetch employee counts from gRPC (workforce service)
         try:
             # Get total employees with filters
-            active_employees_data = await self.employee_client.list_employees(
+            active_employees_data = await self._list_employees_dict(
                 page=1, limit=1, is_active=True
             )
-            total_active = active_employees_data.get("pagination", {}).get("total_items", 0)
+            total_active = active_employees_data.get("pagination", {}).get(
+                "total_items", 0
+            )
 
-            inactive_employees_data = await self.employee_client.list_employees(
+            inactive_employees_data = await self._list_employees_dict(
                 page=1, limit=1, is_active=False
             )
-            total_inactive = inactive_employees_data.get("pagination", {}).get("total_items", 0)
+            total_inactive = inactive_employees_data.get("pagination", {}).get(
+                "total_items", 0
+            )
 
             # TODO: Add created_at filter to gRPC for new employees this month
             new_this_month = 0
@@ -212,7 +263,9 @@ class DashboardService:
 
         # Get attendance/leave data from local DB
         pending_leave = await self.dashboard_repo.count_pending_leave_approvals()
-        on_leave_today = await self.dashboard_repo.count_employees_on_leave_today(target_date)
+        on_leave_today = await self.dashboard_repo.count_employees_on_leave_today(
+            target_date
+        )
         present_today = await self.dashboard_repo.count_attendances_today(target_date)
 
         # Absent today = total active - (present + on leave)
@@ -231,9 +284,7 @@ class DashboardService:
         )
 
     async def _get_org_unit_head_widget(
-        self,
-        current_user: CurrentUser,
-        target_date: date
+        self, current_user: CurrentUser, target_date: date
     ) -> Optional[OrgUnitHeadWidget]:
         """Get manager/head of unit metrics for subordinates"""
 
@@ -245,7 +296,7 @@ class DashboardService:
         try:
             # List all org_units and find which one has this employee as head
             # TODO: Add filter by head_employee_id to gRPC client
-            org_units_data = await self.org_unit_client.list_org_units(page=1, limit=100)
+            org_units_data = await self._list_org_units_dict(page=1, limit=100)
 
             headed_org_unit = None
             for org_unit in org_units_data.get("org_units", []):
@@ -255,14 +306,14 @@ class DashboardService:
                 pass
 
             # Alternative: Fetch employee data which might include org_unit_head info
-            employee_data = await self.employee_client.get_employee(current_user.employee_id)
+            employee_data = await self._get_employee_dict(current_user.employee_id)
             org_unit_id = employee_data.get("org_unit_id")
 
             if not org_unit_id:
                 return None  # Employee not assigned to org_unit
 
             # Get org_unit details
-            org_unit_data = await self.org_unit_client.get_org_unit(org_unit_id)
+            org_unit_data = await self._get_org_unit_dict(org_unit_id)
             org_unit_name = org_unit_data.get("name", "Unknown")
 
         except Exception:
@@ -270,7 +321,7 @@ class DashboardService:
 
         # Get team members from gRPC
         try:
-            team_data = await self.employee_client.list_employees(
+            team_data = await self._list_employees_dict(
                 page=1, limit=1000, org_unit_id=org_unit_id, is_active=True
             )
             team_employees = team_data.get("employees", [])
@@ -300,8 +351,10 @@ class DashboardService:
         team_on_leave = await self.dashboard_repo.count_team_on_leave_today(
             team_employee_ids, target_date
         )
-        team_pending_leave = await self.dashboard_repo.count_team_pending_leave_requests(
-            team_employee_ids
+        team_pending_leave = (
+            await self.dashboard_repo.count_team_pending_leave_requests(
+                team_employee_ids
+            )
         )
 
         team_absent = max(0, team_size - team_present - team_on_leave)
@@ -320,9 +373,7 @@ class DashboardService:
         )
 
     async def _get_guest_widget(
-        self,
-        current_user: CurrentUser,
-        target_date: date
+        self, current_user: CurrentUser, target_date: date
     ) -> GuestWidget:
         """Get limited widget for guest users"""
 
@@ -341,13 +392,13 @@ class DashboardService:
         )
 
     async def _get_today_attendance(
-        self,
-        employee_id: int,
-        target_date: date
+        self, employee_id: int, target_date: date
     ) -> AttendanceStatusToday:
         """Get today's attendance status for an employee"""
 
-        attendance = await self.dashboard_repo.get_today_attendance(employee_id, target_date)
+        attendance = await self.dashboard_repo.get_today_attendance(
+            employee_id, target_date
+        )
 
         if not attendance:
             return AttendanceStatusToday(has_checked_in=False)
@@ -356,6 +407,6 @@ class DashboardService:
             has_checked_in=True,
             check_in_time=attendance.check_in_time,
             check_out_time=attendance.check_out_time,
-            status=attendance.status if hasattr(attendance, 'status') else "present",
+            status=attendance.status if hasattr(attendance, "status") else "present",
             location=None,  # TODO: Format location from lat/long if needed
         )

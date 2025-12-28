@@ -1,62 +1,61 @@
 """
-OrgUnit Module Dependencies - Refactored for Local Repository
-
-Uses local SQLAlchemy repositories instead of gRPC clients for master data.
-Includes event publishing to RabbitMQ.
+OrgUnit Module Dependencies
 """
 
 from typing import Annotated
 from fastapi import Depends
 from app.core.dependencies.database import PostgresDB
-from app.modules.org_units.repositories.org_unit_repository import OrgUnitRepository
-from app.modules.employees.repositories.employee_repository import EmployeeRepository
+from app.modules.org_units.repositories import OrgUnitQueries, OrgUnitCommands
+from app.modules.employees.repositories import EmployeeQueries, EmployeeCommands
 from app.modules.org_units.services.org_unit_service import OrgUnitService
-from app.core.messaging.event_publisher import EventPublisher, event_publisher
+from app.core.messaging import EventPublisher, event_publisher
 
 
-# ===========================================
-# Repositories
-# ===========================================
-
-def get_org_unit_repository(db: PostgresDB) -> OrgUnitRepository:
-    """Get OrgUnit repository instance"""
-    return OrgUnitRepository(db)
+def get_org_unit_queries(db: PostgresDB) -> OrgUnitQueries:
+    return OrgUnitQueries(db)
 
 
-OrgUnitRepositoryDep = Annotated[OrgUnitRepository, Depends(get_org_unit_repository)]
+OrgUnitQueriesDep = Annotated[OrgUnitQueries, Depends(get_org_unit_queries)]
 
 
-def get_employee_repository(db: PostgresDB) -> EmployeeRepository:
-    """Get Employee repository instance"""
-    return EmployeeRepository(db)
+def get_org_unit_commands(db: PostgresDB) -> OrgUnitCommands:
+    return OrgUnitCommands(db)
 
 
-EmployeeRepositoryDep = Annotated[EmployeeRepository, Depends(get_employee_repository)]
+OrgUnitCommandsDep = Annotated[OrgUnitCommands, Depends(get_org_unit_commands)]
 
 
-# ===========================================
-# Event Publisher
-# ===========================================
+def get_employee_queries(db: PostgresDB) -> EmployeeQueries:
+    return EmployeeQueries(db)
+
+
+EmployeeQueriesDep = Annotated[EmployeeQueries, Depends(get_employee_queries)]
+
+
+def get_employee_commands(db: PostgresDB) -> EmployeeCommands:
+    return EmployeeCommands(db)
+
+
+EmployeeCommandsDep = Annotated[EmployeeCommands, Depends(get_employee_commands)]
+
 
 def get_event_publisher() -> EventPublisher:
-    """Get Event publisher instance"""
     return event_publisher
 
 
 EventPublisherDep = Annotated[EventPublisher, Depends(get_event_publisher)]
 
 
-# ===========================================
-# Services
-# ===========================================
-
 def get_org_unit_service(
-    org_unit_repo: OrgUnitRepositoryDep,
-    employee_repo: EmployeeRepositoryDep,
+    queries: OrgUnitQueriesDep,
+    commands: OrgUnitCommandsDep,
+    employee_queries: EmployeeQueriesDep,
+    employee_commands: EmployeeCommandsDep,
     publisher: EventPublisherDep,
 ) -> OrgUnitService:
-    """Get OrgUnit service instance with local repositories and event publisher"""
-    return OrgUnitService(org_unit_repo, employee_repo, publisher)
+    return OrgUnitService(
+        queries, commands, employee_queries, employee_commands, publisher
+    )
 
 
 OrgUnitServiceDep = Annotated[OrgUnitService, Depends(get_org_unit_service)]

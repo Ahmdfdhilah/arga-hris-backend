@@ -14,14 +14,14 @@ from app.modules.users.rbac.schemas.responses import (
     MultipleRoleAssignmentResponse,
 )
 from app.core.dependencies.auth import get_current_user
-from app.core.security.rbac import require_role
+from app.core.security.rbac import require_role, require_permission
 from app.core.schemas import DataResponse, CurrentUser
 
 router = APIRouter(prefix="/roles", tags=["Roles & Permissions"])
 
 
 @router.get("/permissions", response_model=DataResponse[List[PermissionResponse]])
-@require_role(["hr_admin", "super_admin"])
+@require_permission("roles:read")
 async def list_all_permissions(
     service: RoleServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
@@ -32,13 +32,13 @@ async def list_all_permissions(
     Returns:
         List of all permissions in the system
 
-    Role required: admin, super_admin
+    Permission required: roles:read
     """
     return await service.get_all_permissions()
 
 
 @router.get("", response_model=DataResponse[List[RoleResponse]])
-@require_role(["hr_admin", "super_admin"])
+@require_permission("roles:read")
 async def list_all_roles(
     service: RoleServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
@@ -49,15 +49,15 @@ async def list_all_roles(
     Returns:
         List of all roles in the system
 
-    Role required: admin, super_admin
+    Permission required: roles:read
     """
     return await service.get_all_roles()
 
 
 @router.get("/{user_id}", response_model=DataResponse[UserRolesPermissionsResponse])
-@require_role(["hr_admin", "super_admin"])
+@require_permission("roles:read")
 async def get_user_roles_and_permissions(
-    user_id: int,
+    user_id: str,
     service: RoleServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
 ) -> DataResponse[UserRolesPermissionsResponse]:
@@ -67,15 +67,15 @@ async def get_user_roles_and_permissions(
     Returns:
         UserRolesPermissionsResponse dengan roles dan permissions user
 
-    Role required: admin, super_admin
+    Permission required: roles:read
     """
     return await service.get_user_roles_and_permissions(user_id)
 
 
 @router.post("/{user_id}/assign", response_model=DataResponse[RoleAssignmentResponse])
-@require_role(["hr_admin", "super_admin"])
+@require_permission("roles:write")
 async def assign_role_to_user(
-    user_id: int,
+    user_id: str,
     request: AssignRoleRequest,
     service: RoleServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
@@ -90,15 +90,15 @@ async def assign_role_to_user(
     Returns:
         Success response
 
-    Role required: admin, super_admin
+    Permission required: roles:write
     """
     return await service.assign_role_by_name(user_id, request.role_name)
 
 
 @router.post("/{user_id}/remove", response_model=DataResponse[RoleAssignmentResponse])
-@require_role(["hr_admin", "super_admin"])
+@require_permission("roles:write")
 async def remove_role_from_user(
-    user_id: int,
+    user_id: str,
     request: RemoveRoleRequest,
     service: RoleServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
@@ -113,7 +113,7 @@ async def remove_role_from_user(
     Returns:
         Success response
 
-    Role required: admin, super_admin
+    Permission required: roles:write
     """
     return await service.remove_role_by_name(user_id, request.role_name)
 
@@ -122,9 +122,9 @@ async def remove_role_from_user(
     "/{user_id}/assign-multiple",
     response_model=DataResponse[MultipleRoleAssignmentResponse],
 )
-@require_role(["hr_admin", "super_admin"])
+@require_permission("roles:write")
 async def assign_multiple_roles_to_user(
-    user_id: int,
+    user_id: str,
     request: AssignRolesRequest,
     service: RoleServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
@@ -139,6 +139,6 @@ async def assign_multiple_roles_to_user(
     Returns:
         Success response
 
-    Role required: admin, super_admin
+    Permission required: roles:write
     """
     return await service.assign_multiple_roles(user_id, request.role_names)

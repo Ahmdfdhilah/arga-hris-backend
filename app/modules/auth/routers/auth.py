@@ -9,7 +9,7 @@ from app.core.dependencies.auth import get_current_user
 from app.core.schemas import CurrentUser, DataResponse, create_success_response
 from app.modules.auth.schemas import CurrentUserResponse
 
-router = APIRouter()
+router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 @router.get("/me", response_model=DataResponse[CurrentUserResponse])
@@ -20,8 +20,7 @@ async def get_current_user_info(
     return create_success_response(
         message="Current user info",
         data=CurrentUserResponse(
-            id=current_user.id,
-            sso_id=current_user.sso_id,
+            id=current_user.id,  # SSO UUID
             name=current_user.name,
             email=current_user.email,
             avatar_url=current_user.avatar_url,
@@ -31,5 +30,5 @@ async def get_current_user_info(
             roles=current_user.roles,
             permissions=current_user.permissions,
             is_active=current_user.is_active,
-        )
+        ),
     )

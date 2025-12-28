@@ -27,7 +27,7 @@ router = APIRouter(prefix="/employees", tags=["Employees"])
 
 
 @router.get("", response_model=PaginatedResponse[EmployeeResponse])
-@require_permission("employee.read")
+@require_permission("employees:read")
 async def list_employees(
     service: EmployeeServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
@@ -48,7 +48,7 @@ async def list_employees(
 
 
 @router.get("/deleted", response_model=PaginatedResponse[EmployeeResponse])
-@require_permission("employee.view_deleted")
+@require_permission("employees:view_deleted")
 async def list_deleted_employees(
     service: EmployeeServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
@@ -66,8 +66,10 @@ async def list_deleted_employees(
     )
 
 
-@router.get("/org-unit/{org_unit_id}", response_model=PaginatedResponse[EmployeeResponse])
-@require_permission("employee.read")
+@router.get(
+    "/org-unit/{org_unit_id}", response_model=PaginatedResponse[EmployeeResponse]
+)
+@require_permission("employees:read")
 async def list_by_org_unit(
     org_unit_id: int,
     service: EmployeeServiceDep,
@@ -76,7 +78,9 @@ async def list_by_org_unit(
     limit: int = Query(10, ge=1, le=250),
     include_children: bool = Query(False),
 ) -> PaginatedResponse[EmployeeResponse]:
-    items, pagination = await service.list_by_org_unit(org_unit_id, page, limit, include_children)
+    items, pagination = await service.list_by_org_unit(
+        org_unit_id, page, limit, include_children
+    )
     return create_paginated_response(
         message="Success",
         data=items,
@@ -86,30 +90,38 @@ async def list_by_org_unit(
     )
 
 
-@router.get("/by-email/{email}", response_model=DataResponse[Optional[EmployeeResponse]])
-@require_permission("employee.read")
+@router.get(
+    "/by-email/{email}", response_model=DataResponse[Optional[EmployeeResponse]]
+)
+@require_permission("employees:read")
 async def get_by_email(
     email: str,
     service: EmployeeServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
 ) -> DataResponse[Optional[EmployeeResponse]]:
     data = await service.get_by_email(email)
-    return create_success_response(message="Success" if data else "Not found", data=data)
+    return create_success_response(
+        message="Success" if data else "Not found", data=data
+    )
 
 
-@router.get("/by-number/{number}", response_model=DataResponse[Optional[EmployeeResponse]])
-@require_permission("employee.read")
-async def get_by_number(
-    number: str,
+@router.get(
+    "/by-code/{code}", response_model=DataResponse[Optional[EmployeeResponse]]
+)
+@require_permission("employees:read")
+async def get_by_code(
+    code: str,
     service: EmployeeServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
 ) -> DataResponse[Optional[EmployeeResponse]]:
-    data = await service.get_by_number(number)
-    return create_success_response(message="Success" if data else "Not found", data=data)
+    data = await service.get_by_code(code)
+    return create_success_response(
+        message="Success" if data else "Not found", data=data
+    )
 
 
 @router.get("/{employee_id}", response_model=DataResponse[EmployeeResponse])
-@require_permission("employee.read")
+@require_permission("employees:read")
 async def get_employee(
     employee_id: int,
     service: EmployeeServiceDep,
@@ -119,8 +131,10 @@ async def get_employee(
     return create_success_response(message="Success", data=data)
 
 
-@router.get("/{employee_id}/subordinates", response_model=PaginatedResponse[EmployeeResponse])
-@require_permission("employee.read")
+@router.get(
+    "/{employee_id}/subordinates", response_model=PaginatedResponse[EmployeeResponse]
+)
+@require_permission("employees:read")
 async def list_subordinates(
     employee_id: int,
     service: EmployeeServiceDep,
@@ -129,7 +143,9 @@ async def list_subordinates(
     limit: int = Query(10, ge=1, le=250),
     recursive: bool = Query(False),
 ) -> PaginatedResponse[EmployeeResponse]:
-    items, pagination = await service.list_subordinates(employee_id, page, limit, recursive)
+    items, pagination = await service.list_subordinates(
+        employee_id, page, limit, recursive
+    )
     return create_paginated_response(
         message="Success",
         data=items,
@@ -139,63 +155,54 @@ async def list_subordinates(
     )
 
 
-@router.post("", response_model=DataResponse[EmployeeResponse], status_code=status.HTTP_201_CREATED)
-@require_role(["super_admin", "hr_admin"])
+@router.post(
+    "",
+    response_model=DataResponse[EmployeeResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+@require_permission("employees:write")
 async def create_employee(
     request: EmployeeCreateRequest,
     service: EmployeeServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
 ) -> DataResponse[EmployeeResponse]:
-    data, temp_password, warnings = await service.create(
-        number=request.number,
-        first_name=request.first_name,
-        last_name=request.last_name,
+    data = await service.create(
+        code=request.code,
+        name=request.name,
         email=request.email,
         created_by=current_user.id,
         org_unit_id=request.org_unit_id,
         phone=request.phone,
         position=request.position,
+        site=request.site,
         employee_type=request.type,
         gender=request.gender,
         supervisor_id=request.supervisor_id,
     )
-    
-    response_data = {
-        "employee": data,
-        "temporary_password": temp_password,
-        "warnings": warnings,
-    }
-    return create_success_response(message="Created", data=response_data)
+
+    return create_success_response(message="Created", data=data)
 
 
-@router.put("/{employee_id}", response_model=DataResponse[EmployeeResponse])
-@require_role(["super_admin", "hr_admin"])
+@router.patch("/{employee_id}", response_model=DataResponse[EmployeeResponse])
+@require_permission("employees:write")
 async def update_employee(
     employee_id: int,
     request: EmployeeUpdateRequest,
     service: EmployeeServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
 ) -> DataResponse[EmployeeResponse]:
-    data, warnings = await service.update(
+    update_data = request.model_dump(exclude_unset=True)
+    data = await service.update(
         employee_id=employee_id,
         updated_by=current_user.id,
-        first_name=request.first_name,
-        last_name=request.last_name,
-        phone=request.phone,
-        gender=request.gender,
-        position=request.position,
-        employee_type=request.type,
-        org_unit_id=request.org_unit_id,
-        supervisor_id=request.supervisor_id,
-        is_active=request.is_active,
+        update_data=update_data,
     )
-    
-    response_data = {"employee": data, "warnings": warnings}
-    return create_success_response(message="Updated", data=response_data)
+
+    return create_success_response(message="Updated", data=data)
 
 
 @router.delete("/{employee_id}", response_model=DataResponse[Dict[str, Any]])
-@require_role(["super_admin", "hr_admin"])
+@require_permission("employees:delete")
 async def delete_employee(
     employee_id: int,
     service: EmployeeServiceDep,
@@ -206,7 +213,7 @@ async def delete_employee(
 
 
 @router.post("/{employee_id}/restore", response_model=DataResponse[EmployeeResponse])
-@require_permission("employee.restore")
+@require_permission("employees:restore")
 async def restore_employee(
     employee_id: int,
     service: EmployeeServiceDep,
@@ -226,48 +233,64 @@ async def bulk_insert_employees(
 ) -> DataResponse[BulkInsertResult]:
     from app.modules.employees.schemas.requests import EmployeeBulkItem
 
-    if not file.filename or not file.filename.endswith(('.xlsx', '.xls')):
+    if not file.filename or not file.filename.endswith((".xlsx", ".xls")):
         return create_success_response(
             message="Invalid file type",
             data=BulkInsertResult(
-                total_items=0, success_count=0, error_count=1,
-                errors=[{"error": "Invalid file type"}], warnings=[], created_ids=[]
-            )
+                total_items=0,
+                success_count=0,
+                error_count=1,
+                errors=[{"error": "Invalid file type"}],
+                warnings=[],
+                created_ids=[],
+            ),
         )
 
     file_content = await file.read()
 
     try:
-        parsed_data = ExcelParser.parse_employees_sheet(file_content, sheet_name="Karyawan")
+        parsed_data = ExcelParser.parse_employees_sheet(
+            file_content, sheet_name="Karyawan"
+        )
     except Exception as e:
         return create_success_response(
             message=f"Parse error: {e}",
             data=BulkInsertResult(
-                total_items=0, success_count=0, error_count=1,
-                errors=[{"error": str(e)}], warnings=[], created_ids=[]
-            )
+                total_items=0,
+                success_count=0,
+                error_count=1,
+                errors=[{"error": str(e)}],
+                warnings=[],
+                created_ids=[],
+            ),
         )
 
     bulk_items = []
     validation_errors = []
-    
+
     for item_data in parsed_data:
         try:
             bulk_items.append(EmployeeBulkItem(**item_data))
         except Exception as e:
-            validation_errors.append({
-                "row_number": item_data.get("row_number", "?"),
-                "number": item_data.get("number", "?"),
-                "error": str(e)
-            })
+            validation_errors.append(
+                {
+                    "row_number": item_data.get("row_number", "?"),
+                    "code": item_data.get("code", "?"),
+                    "error": str(e),
+                }
+            )
 
     if not bulk_items:
         return create_success_response(
             message="No valid data",
             data=BulkInsertResult(
-                total_items=len(parsed_data), success_count=0, error_count=len(parsed_data),
-                errors=validation_errors or [{"error": "No valid data"}], warnings=[], created_ids=[]
-            )
+                total_items=len(parsed_data),
+                success_count=0,
+                error_count=len(parsed_data),
+                errors=validation_errors or [{"error": "No valid data"}],
+                warnings=[],
+                created_ids=[],
+            ),
         )
 
     success_count = 0
@@ -278,8 +301,8 @@ async def bulk_insert_employees(
 
     for item in bulk_items:
         try:
-            result, temp_pw, item_warnings = await service.create(
-                number=item.number,
+            result = await service.create(
+                code=item.code,
                 first_name=item.first_name,
                 last_name=item.last_name,
                 email=item.email,
@@ -287,17 +310,17 @@ async def bulk_insert_employees(
                 org_unit_id=item.org_unit_id,
                 phone=item.phone,
                 position=item.position,
+                site=item.site,
                 employee_type=item.type,
                 gender=item.gender,
             )
             success_count += 1
             created_ids.append(result.id)
-            if item_warnings:
-                warnings.extend(item_warnings)
+
         except Exception as e:
             error_count += 1
             if skip_errors:
-                errors.append({"number": item.number, "error": str(e)})
+                errors.append({"code": item.code, "error": str(e)})
             else:
                 raise
 
@@ -309,6 +332,6 @@ async def bulk_insert_employees(
             error_count=error_count + len(validation_errors),
             errors=errors,
             warnings=warnings,
-            created_ids=created_ids
-        )
+            created_ids=created_ids,
+        ),
     )

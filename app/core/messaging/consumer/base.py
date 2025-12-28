@@ -6,7 +6,7 @@ All handlers MUST be idempotent.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 from datetime import datetime
 import logging
 
@@ -16,8 +16,13 @@ class DomainEvent:
     """
     Standard event structure - shared across all services.
     
+    Fields match publisher format:
+    - entity_type: Domain entity (farmer, user, employee)
+    - event_action: Action type (created, updated, deleted)
+    
     Attributes:
-        event_type: Event name (e.g. "user.created")
+        entity_type: Entity domain (e.g. "user", "farmer")
+        event_action: Action (e.g. "created", "updated", "deleted")
         entity_id: Primary key of the entity
         data: Event payload
         timestamp: When event occurred
@@ -25,13 +30,18 @@ class DomainEvent:
         correlation_id: For distributed tracing
         version: Schema version for compatibility
     """
-    event_type: str
+    entity_type: str          # e.g., "user"
+    event_action: str         # e.g., "created"
     entity_id: Any
     data: Dict[str, Any]
     timestamp: datetime
     source_service: str
     correlation_id: str = ""
     version: int = 1
+    
+    def get_routing_key(self) -> str:
+        """Get routing key format: 'user.created'"""
+        return f"{self.entity_type}.{self.event_action}"
 
 
 class BaseEventHandler(ABC):
@@ -76,7 +86,7 @@ class BaseEventHandler(ABC):
     
     async def on_success(self, event: DomainEvent) -> None:
         """Called after successful handling."""
-        self.logger.info(f"Handled {event.event_type} for entity {event.entity_id}")
+        self.logger.info(f"Handled {event.get_routing_key()} for entity {event.entity_id}")
     
     async def on_error(self, event: DomainEvent, error: Exception) -> None:
         """
@@ -85,10 +95,11 @@ class BaseEventHandler(ABC):
         Override for custom error handling (e.g., alerting).
         """
         self.logger.error(
-            f"Handler failed for {event.event_type}: {error}",
+            f"Handler failed for {event.get_routing_key()}: {error}",
             exc_info=True,
             extra={
-                "event_type": event.event_type,
+                "entity_type": event.entity_type,
+                "event_action": event.event_action,
                 "entity_id": event.entity_id,
                 "source": event.source_service,
             }

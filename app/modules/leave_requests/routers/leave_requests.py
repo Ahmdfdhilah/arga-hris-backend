@@ -12,7 +12,13 @@ from app.modules.leave_requests.schemas.responses import (
 )
 from app.core.dependencies.auth import get_current_user
 from app.core.security.rbac import require_permission
-from app.core.schemas import CurrentUser, DataResponse, PaginatedResponse
+from app.core.schemas import (
+    CurrentUser,
+    DataResponse,
+    PaginatedResponse,
+    create_success_response,
+    create_paginated_response,
+)
 from app.core.exceptions import UnprocessableEntityException
 
 router = APIRouter(prefix="/leave-requests", tags=["Leave Requests"])
@@ -21,7 +27,7 @@ router = APIRouter(prefix="/leave-requests", tags=["Leave Requests"])
 @router.get(
     "/my-leave-requests", response_model=PaginatedResponse[LeaveRequestResponse]
 )
-@require_permission("leave_request.read_own")
+@require_permission("leave:read")
 async def get_my_leave_requests(
     service: LeaveRequestServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
@@ -37,9 +43,9 @@ async def get_my_leave_requests(
     Ambil daftar leave requests employee sendiri.
     Employee hanya bisa melihat leave request miliknya sendiri.
 
-    **Permission required**: leave_request.read_own
+    **Permission required**: leave:read
     """
-    return await service.get_my_leave_requests(
+    items, total_items = await service.get_my_leave_requests(
         employee_id=current_user.employee_id or 0,
         start_date=start_date,
         end_date=end_date,
@@ -47,28 +53,39 @@ async def get_my_leave_requests(
         page=page,
         limit=limit,
     )
+    return create_paginated_response(
+        message="Daftar leave request berhasil diambil",
+        data=items,
+        page=page,
+        limit=limit,
+        total_items=total_items,
+    )
 
 
 @router.post("/", status_code=201, response_model=DataResponse[LeaveRequestResponse])
-@require_permission("leave_request.create")
+@require_permission("leave:write")
 async def create_leave_request(
     request: LeaveRequestCreateRequest,
     service: LeaveRequestServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
 ) -> DataResponse[LeaveRequestResponse]:
     """
-    Membuat leave request baru (HR Admin/Super Admin only).
+    Membuat leave request baru.
 
-    **Permission required**: leave_request.create
+    **Permission required**: leave:write
     """
-    return await service.create_leave_request(
+    result = await service.create_leave_request(
         request=request,
         created_by_user_id=current_user.id,
+    )
+    return create_success_response(
+        message="Leave request berhasil dibuat",
+        data=result,
     )
 
 
 @router.get("/", response_model=PaginatedResponse[LeaveRequestListResponse])
-@require_permission("leave_request.read_all")
+@require_permission("leave:read_all")
 async def list_all_leave_requests(
     service: LeaveRequestServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
@@ -86,9 +103,9 @@ async def list_all_leave_requests(
     """
     Ambil daftar semua leave requests (HR Admin/Super Admin only).
 
-    **Permission required**: leave_request.read_all
+    **Permission required**: leave:read_all
     """
-    return await service.list_all_leave_requests(
+    items, total_items = await service.list_all_leave_requests(
         employee_id=employee_id,
         start_date=start_date,
         end_date=end_date,
@@ -96,10 +113,17 @@ async def list_all_leave_requests(
         page=page,
         limit=limit,
     )
+    return create_paginated_response(
+        message="Daftar leave request berhasil diambil",
+        data=items,
+        page=page,
+        limit=limit,
+        total_items=total_items,
+    )
 
 
 @router.get("/{leave_request_id}", response_model=DataResponse[LeaveRequestResponse])
-@require_permission("leave_request.read")
+@require_permission("leave:read_all")
 async def get_leave_request(
     leave_request_id: int,
     service: LeaveRequestServiceDep,
@@ -108,13 +132,17 @@ async def get_leave_request(
     """
     Ambil detail leave request berdasarkan ID (HR Admin/Super Admin only).
 
-    **Permission required**: leave_request.read
+    **Permission required**: leave:read_all
     """
-    return await service.get_leave_request_by_id(leave_request_id)
+    result = await service.get_leave_request_by_id(leave_request_id)
+    return create_success_response(
+        message="Leave request berhasil diambil",
+        data=result,
+    )
 
 
 @router.put("/{leave_request_id}", response_model=DataResponse[LeaveRequestResponse])
-@require_permission("leave_request.update")
+@require_permission("leave:update")
 async def update_leave_request(
     leave_request_id: int,
     request: LeaveRequestUpdateRequest,
@@ -124,16 +152,20 @@ async def update_leave_request(
     """
     Update leave request (HR Admin/Super Admin only).
 
-    **Permission required**: leave_request.update
+    **Permission required**: leave:update
     """
-    return await service.update_leave_request(
+    result = await service.update_leave_request(
         leave_request_id=leave_request_id,
         request=request,
+    )
+    return create_success_response(
+        message="Leave request berhasil diupdate",
+        data=result,
     )
 
 
 @router.delete("/{leave_request_id}", response_model=DataResponse[None])
-@require_permission("leave_request.delete")
+@require_permission("leave:delete")
 async def delete_leave_request(
     leave_request_id: int,
     service: LeaveRequestServiceDep,
@@ -142,15 +174,19 @@ async def delete_leave_request(
     """
     Hapus leave request (HR Admin/Super Admin only).
 
-    **Permission required**: leave_request.delete
+    **Permission required**: leave:delete
     """
-    return await service.delete_leave_request(leave_request_id)
+    await service.delete_leave_request(leave_request_id)
+    return create_success_response(
+        message="Leave request berhasil dihapus",
+        data=None,
+    )
 
 
 @router.get(
     "/team/leave-requests", response_model=PaginatedResponse[LeaveRequestListResponse]
 )
-@require_permission("leave_request.read_team")
+@require_permission("leave:approve") 
 async def get_team_leave_requests(
     service: LeaveRequestServiceDep,
     current_user: CurrentUser = Depends(get_current_user),
@@ -166,16 +202,23 @@ async def get_team_leave_requests(
     Ambil leave requests team/subordinates (untuk org unit head).
     Menampilkan leave requests dari semua subordinates (recursive).
 
-    **Permission required**: leave_request.read_team
+    **Permission required**: leave:approve
     """
     if current_user.employee_id is None:
         raise UnprocessableEntityException("employee id tidak valid")
 
-    return await service.get_team_leave_requests(
+    items, total_items = await service.get_team_leave_requests(
         employee_id=current_user.employee_id,
         start_date=start_date,
         end_date=end_date,
         leave_type=leave_type,
         page=page,
         limit=limit,
+    )
+    return create_paginated_response(
+        message="Daftar leave request berhasil diambil",
+        data=items,
+        page=page,
+        limit=limit,
+        total_items=total_items,
     )

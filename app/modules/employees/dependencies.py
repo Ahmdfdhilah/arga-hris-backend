@@ -5,40 +5,55 @@ Employee Module Dependencies
 from typing import Annotated
 from fastapi import Depends
 from app.core.dependencies.database import PostgresDB
-from app.modules.employees.repositories.employee_repository import EmployeeRepository
-from app.modules.org_units.repositories.org_unit_repository import OrgUnitRepository
+from app.modules.employees.repositories import EmployeeQueries, EmployeeCommands
+from app.modules.org_units.repositories import OrgUnitQueries
+from app.modules.users.users.repositories import UserQueries, UserCommands
+from app.modules.users.rbac.repositories import RoleQueries
+from app.core.messaging import EventPublisher, event_publisher
+
 from app.modules.employees.services.employee_service import EmployeeService
-from app.modules.users.users.repositories.user_repository import UserRepository
-from app.modules.users.rbac.repositories.role_repository import RoleRepository
-from app.core.messaging.event_publisher import EventPublisher, event_publisher
 
 
-def get_employee_repository(db: PostgresDB) -> EmployeeRepository:
-    return EmployeeRepository(db)
+def get_employee_queries(db: PostgresDB) -> EmployeeQueries:
+    return EmployeeQueries(db)
 
 
-EmployeeRepositoryDep = Annotated[EmployeeRepository, Depends(get_employee_repository)]
+EmployeeQueriesDep = Annotated[EmployeeQueries, Depends(get_employee_queries)]
 
 
-def get_org_unit_repository(db: PostgresDB) -> OrgUnitRepository:
-    return OrgUnitRepository(db)
+def get_employee_commands(db: PostgresDB) -> EmployeeCommands:
+    return EmployeeCommands(db)
 
 
-OrgUnitRepositoryDep = Annotated[OrgUnitRepository, Depends(get_org_unit_repository)]
+EmployeeCommandsDep = Annotated[EmployeeCommands, Depends(get_employee_commands)]
 
 
-def get_user_repository(db: PostgresDB) -> UserRepository:
-    return UserRepository(db)
+def get_org_unit_queries(db: PostgresDB) -> OrgUnitQueries:
+    return OrgUnitQueries(db)
 
 
-UserRepositoryDep = Annotated[UserRepository, Depends(get_user_repository)]
+OrgUnitQueriesDep = Annotated[OrgUnitQueries, Depends(get_org_unit_queries)]
 
 
-def get_role_repository(db: PostgresDB) -> RoleRepository:
-    return RoleRepository(db)
+def get_user_queries(db: PostgresDB) -> UserQueries:
+    return UserQueries(db)
 
 
-RoleRepositoryDep = Annotated[RoleRepository, Depends(get_role_repository)]
+UserQueriesDep = Annotated[UserQueries, Depends(get_user_queries)]
+
+
+def get_user_commands(db: PostgresDB) -> UserCommands:
+    return UserCommands(db)
+
+
+UserCommandsDep = Annotated[UserCommands, Depends(get_user_commands)]
+
+
+def get_role_queries(db: PostgresDB) -> RoleQueries:
+    return RoleQueries(db)
+
+
+RoleQueriesDep = Annotated[RoleQueries, Depends(get_role_queries)]
 
 
 def get_event_publisher() -> EventPublisher:
@@ -49,14 +64,22 @@ EventPublisherDep = Annotated[EventPublisher, Depends(get_event_publisher)]
 
 
 def get_employee_service(
-    employee_repo: EmployeeRepositoryDep,
-    org_unit_repo: OrgUnitRepositoryDep,
-    user_repo: UserRepositoryDep,
-    role_repo: RoleRepositoryDep,
+    queries: EmployeeQueriesDep,
+    commands: EmployeeCommandsDep,
+    org_unit_queries: OrgUnitQueriesDep,
+    user_queries: UserQueriesDep,
+    user_commands: UserCommandsDep,
+    role_queries: RoleQueriesDep,
     publisher: EventPublisherDep,
 ) -> EmployeeService:
     return EmployeeService(
-        employee_repo, org_unit_repo, user_repo, role_repo, publisher
+        queries,
+        commands,
+        org_unit_queries,
+        user_queries,
+        user_commands,
+        role_queries,
+        publisher,
     )
 
 

@@ -132,7 +132,8 @@ class GCPStorageClient:
     def get_file_url(
         self,
         file_path: str,
-        expiration: timedelta = timedelta(days=7)
+        expiration: timedelta = timedelta(days=7),
+        bucket_name: Optional[str] = None
     ) -> Optional[str]:
         """
         Get signed URL untuk file (untuk private files)
@@ -140,6 +141,8 @@ class GCPStorageClient:
         Args:
             file_path: Path file di bucket
             expiration: Waktu expired URL (default 7 hari)
+            bucket_name: Nama bucket (optional). Jika tidak diisi, pakai bucket default.
+                        Berguna untuk generate signed URL dari bucket lain (e.g., SSO bucket).
 
         Returns:
             Optional[str]: Signed URL atau None jika file tidak ada
@@ -150,10 +153,19 @@ class GCPStorageClient:
             ...     settings.GCP_CREDENTIALS_PATH,
             ...     settings.GCP_BUCKET_NAME
             ... )
+            >>> # Default bucket (HRIS)
             >>> url = client.get_file_url("farmers/photos/farmer123.jpg")
+            >>>
+            >>> # Bucket lain (SSO)
+            >>> url = client.get_file_url(
+            ...     "users/avatars/user123.jpg",
+            ...     bucket_name=settings.GCP_SSO_BUCKET_NAME
+            ... )
         """
         try:
-            blob = self.bucket.blob(file_path)
+            # Pilih bucket: custom bucket atau default bucket
+            target_bucket = self.client.bucket(bucket_name) if bucket_name else self.bucket
+            blob = target_bucket.blob(file_path)
 
             # Check if file exists
             if not blob.exists():
@@ -169,6 +181,40 @@ class GCPStorageClient:
         except Exception as e:
             print(f"Error getting file URL: {e}")
             return None
+
+    def get_sso_file_url(
+        self,
+        file_path: str,
+        expiration: timedelta = timedelta(days=7)
+    ) -> Optional[str]:
+        """
+        Shortcut untuk generate signed URL dari SSO bucket.
+
+        Fungsi ini khusus untuk file-file yang berasal dari service SSO
+        (misal: user avatar_path yang disimpan di users table).
+
+        Args:
+            file_path: Path file di SSO bucket
+            expiration: Waktu expired URL (default 7 hari)
+
+        Returns:
+            Optional[str]: Signed URL atau None jika file tidak ada
+
+        Example:
+            >>> from app.core.config import settings
+            >>> client = GCPStorageClient(
+            ...     settings.GCP_CREDENTIALS_PATH,
+            ...     settings.GCP_BUCKET_NAME
+            ... )
+            >>> # Generate URL untuk avatar yang ada di bucket SSO
+            >>> url = client.get_sso_file_url("users/avatars/user123.jpg")
+        """
+        from app.config.settings import settings
+        return self.get_file_url(
+            file_path=file_path,
+            expiration=expiration,
+            bucket_name=settings.GCP_SSO_BUCKET_NAME
+        )
 
     def file_exists(self, file_path: str) -> bool:
         """

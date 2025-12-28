@@ -2,11 +2,12 @@ from typing import List, Generic, TypeVar
 from pydantic import BaseModel
 from app.core.schemas.base import BaseResponse
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class PaginationMeta(BaseModel):
     """Pagination metadata for paginated responses."""
+
     page: int
     limit: int
     total_items: int
@@ -30,5 +31,6 @@ class PaginatedResponse(BaseResponse, Generic[T]):
 
     The generic type T ensures type safety for items in the data list.
     """
+
     data: List[T]
     meta: PaginationMeta

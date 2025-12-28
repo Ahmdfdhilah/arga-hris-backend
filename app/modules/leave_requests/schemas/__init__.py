@@ -6,6 +6,7 @@ from app.modules.leave_requests.schemas.requests import (
 from app.modules.leave_requests.schemas.responses import (
     LeaveRequestResponse,
     LeaveRequestListResponse,
+    ReplacementInfo,
 )
 
 __all__ = [
@@ -14,4 +15,5 @@ __all__ = [
     "LeaveRequestUpdateRequest",
     "LeaveRequestResponse",
     "LeaveRequestListResponse",
+    "ReplacementInfo",
 ]

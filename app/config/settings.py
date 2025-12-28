@@ -32,12 +32,17 @@ class Settings(BaseSettings):
         default="app/credentials/gcp/your-gcp-credentials.json"
     )
     GCP_BUCKET_NAME: str = Field(default="sahabat-arga-bucket")
+    GCP_SSO_BUCKET_NAME: str = Field(
+        default="sahabat-arga-sso-bucket",
+        description="Bucket SSO untuk signed URLs cross-service (user avatars)"
+    )
 
     JWT_PUBLIC_KEY_PATH: str = Field(default="./jwt_public.pem")
     JWT_ALGORITHM: str = Field(default="RS256")
-
-    WORKFORCE_GRPC_HOST: str = Field(...)
-    WORKFORCE_GRPC_PORT: int = Field(...)
+    JWKS_CACHE_TTL_SECONDS: int = Field(
+        default=3600,
+        description="TTL for JWKS cache in seconds (default: 1 hour)"
+    )
 
     # SSO Service for user sync
     SSO_SERVICE_URL: str = Field(default="http://localhost:8001")
@@ -47,6 +52,21 @@ class Settings(BaseSettings):
     )
     SSO_GRPC_HOST: str = Field(default="localhost")
     SSO_GRPC_PORT: int = Field(default=50051)
+
+    CLIENT_ID: str = Field(
+        default="hris-arga", description="Application client_id for JWT verification"
+    )
+    PM_APP_CODE: str = Field(
+        default="pm-arga", description="PM application code for auto-assigning employees"
+    )
+
+    # gRPC Server Settings (HRIS as master for Employee/OrgUnit)
+    GRPC_HOST: str = Field(default="0.0.0.0")
+    GRPC_PORT: int = Field(default=50053)
+
+    # gRPC Client Settings
+    GRPC_MAX_MESSAGE_SIZE: int = Field(default=15 * 1024 * 1024)
+    GRPC_TIMEOUT_SECONDS: int = Field(default=30)
 
     # Nominatim OpenStreetMap Geocoding Service
     NOMINATIM_BASE_URL: str = Field(

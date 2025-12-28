@@ -6,7 +6,7 @@ from datetime import date
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.attendance.models.attendance import Attendance
+from app.modules.attendances.models.attendances import Attendance
 from app.modules.leave_requests.models.leave_request import LeaveRequest
 
 
