@@ -22,10 +22,6 @@ async def lifespan(app: FastAPI):
     Yields:
         None: Control back to the application
     """
-    # Import event handlers to register them
-    import app.modules.users.users.events  # noqa: F401 - registers handlers
-
-    from app.core.messaging.consumer import EventHandlerRegistry
     from app.grpc.server import grpc_server
 
     consumer = None
@@ -35,7 +31,6 @@ async def lifespan(app: FastAPI):
     await setup_scheduler()
     logger.info("Scheduler started successfully")
 
-    # Startup: gRPC Server (for Employee/OrgUnit master data)
     logger.info("Starting gRPC server...")
     try:
         await grpc_server.start()
@@ -62,11 +57,8 @@ async def lifespan(app: FastAPI):
         logger.info("RabbitMQ Topology applied successfully")
 
         # 3. Start Event Processor Loop
-        # Note: Queue name is now derived from topology or hardcoded if simple
-        # For now, we start one processor for the main service queue
         consumer = EventProcessor(service_name="hris")
-        # We assume the user module binding created this queue
-        await consumer.start_background(queue_name="hris_backend_user_events") # Must match binding
+        await consumer.start_background(queue_name="hris_backend_user_events")
         logger.info("Event consumer started in background")
 
     except Exception as e:

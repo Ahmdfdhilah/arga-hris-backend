@@ -19,11 +19,6 @@ def user_proto_to_dict(user: user_pb2.User) -> Dict[str, Any]:
         "avatar_path": user.avatar_path or None,
         "status": user.status,
         "role": user.role,
-        "alias": user.alias or None,
-        "gender": user.gender or None,
-        "date_of_birth": user.date_of_birth.ToDatetime() if user.HasField("date_of_birth") else None,
-        "address": user.address or None,
-        "bio": user.bio or None,
         "created_at": user.created_at.ToDatetime() if user.HasField("created_at") else None,
         "updated_at": user.updated_at.ToDatetime() if user.HasField("updated_at") else None,
     }

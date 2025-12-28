@@ -138,12 +138,37 @@ class SSOUserGRPCClient(BaseGRPCClient):
         except grpc.RpcError as e:
             await self.handle_grpc_error(e)
 
-    async def delete_user(self, user_id: str) -> Dict[str, Any]:
-        """Soft delete user in SSO."""
+    async def remove_user_from_apps(
+        self, user_id: str, app_codes: List[str]
+    ) -> Dict[str, Any]:
+        """Remove user from specific applications (app-specific delete)."""
         try:
             stub = await self.get_stub()
-            request = user_pb2.DeleteUserRequest(user_id=user_id)
-            response = await stub.DeleteUser(request)
+            request = user_pb2.RemoveUserFromAppsRequest(
+                user_id=user_id,
+                app_codes=app_codes,
+            )
+            response = await stub.RemoveUserFromApps(request)
+            
+            return {
+                "success": response.success,
+                "error": response.error if response.HasField("error") else None,
+                "remaining_apps": response.remaining_apps,
+            }
+        except grpc.RpcError as e:
+            await self.handle_grpc_error(e)
+
+    async def assign_user_to_apps(
+        self, user_id: str, app_codes: List[str]
+    ) -> Dict[str, Any]:
+        """Assign user to specific applications (for restore)."""
+        try:
+            stub = await self.get_stub()
+            request = user_pb2.AssignUserToAppsRequest(
+                user_id=user_id,
+                app_codes=app_codes,
+            )
+            response = await stub.AssignUserToApps(request)
             
             return {
                 "success": response.success,

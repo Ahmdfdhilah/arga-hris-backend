@@ -49,11 +49,15 @@ class DeleteEmployeeUseCase:
             )
 
         if employee.user_id:
+            logger.info(f"Calling SSO to remove user {employee.user_id} from apps...")
             await SSOSyncUtil.delete_sso_user(
                 sso_client=self.sso_client,
                 user_commands=self.user_commands,
                 user_id=employee.user_id,
             )
+            logger.info(f"SSO sync completed for user {employee.user_id}")
+        else:
+            logger.warning(f"Employee {employee_id} has no user_id, skipping SSO sync")
 
         subordinates = await self.queries.get_all_by_supervisor(employee_id)
         subordinate_ids = []

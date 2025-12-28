@@ -68,7 +68,7 @@ class UpdateEmployeeUseCase:
                 existing_code = await self.queries.get_by_code(code)
                 if existing_code:
                     raise ConflictException(
-                        f"Employee code '{code}' already exists"
+                        f"Kode karyawan '{code}' sudah digunakan"
                     )
                 employee.code = code
 

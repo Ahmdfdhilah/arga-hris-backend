@@ -30,26 +30,38 @@ class SSOSyncUtil:
 
         app_codes = [settings.CLIENT_ID, settings.PM_APP_CODE]
         
-        create_result = await sso_client.create_user(
-            email=email,
-            name=name,
-            phone=phone,
-            role="user",
-            app_codes=app_codes,
-        )
-
+        # First check if SSO user already exists by email
+        existing_sso = await sso_client.get_user_by_email(email)
         sso_user = None
-        if not create_result.get("success"):
-            existing_sso = await sso_client.get_user_by_email(email)
-            if existing_sso:
-                sso_user = existing_sso
-            else:
-                raise ConflictException(
-                    f"Failed to create SSO user: {create_result.get('error')}"
-                )
+        
+        if existing_sso:
+            # User exists, just assign to apps
+            sso_user = existing_sso
+            await sso_client.assign_user_to_apps(sso_user["id"], app_codes)
+            logger.info(f"SSO user {email} already exists, assigned to apps")
         else:
+            # Create new SSO user
+            create_result = await sso_client.create_user(
+                email=email,
+                name=name,
+                phone=phone,
+                role="user",
+                app_codes=app_codes,
+            )
+            
+            if not create_result.get("success"):
+                error_msg = create_result.get("error", "Unknown error")
+                # Check for specific constraint violations
+                if "phone" in error_msg and "unique" in error_msg.lower():
+                    raise ConflictException(f"Nomor telepon '{phone}' sudah digunakan oleh user lain")
+                elif "email" in error_msg and "unique" in error_msg.lower():
+                    raise ConflictException(f"Email '{email}' sudah digunakan")
+                else:
+                    raise ConflictException(f"Gagal membuat SSO user: {error_msg}")
+            
             sso_user = create_result["user"]
 
+        # Sync to local user table
         local_user = await user_queries.get_by_email(email)
         if not local_user:
             new_user = User(
@@ -127,11 +139,16 @@ class SSOSyncUtil:
     async def delete_sso_user(
         sso_client: SSOUserGRPCClient, user_commands: UserCommands, user_id: str
     ) -> None:
-        """Soft delete SSO user and deactivate local user"""
+        """Remove user from HRIS and PM apps (app-specific delete), deactivate local user."""
+        from app.config.settings import settings
+        
         if user_id:
-            result = await sso_client.delete_user(user_id)
+            app_codes = [settings.CLIENT_ID, settings.PM_APP_CODE]
+            result = await sso_client.remove_user_from_apps(user_id, app_codes)
             if not result.get("success"):
-                logger.warning(f"Failed to delete SSO user {user_id}: {result.get('error')}")
+                logger.warning(f"Failed to remove user {user_id} from apps: {result.get('error')}")
+            else:
+                logger.info(f"Removed user {user_id} from apps {app_codes}, remaining: {result.get('remaining_apps')}")
 
             await user_commands.deactivate(user_id)
 
@@ -139,24 +156,15 @@ class SSOSyncUtil:
     async def restore_sso_user(
         sso_client: SSOUserGRPCClient, user_commands: UserCommands, user_id: str
     ) -> None:
-        """
-        Restore SSO user and reactivate local user.
-        If SSO user doesn't exist (was hard deleted), logs warning and continues
-        with local user activation only.
-        """
+        """Re-assign user to HRIS and PM apps, reactivate local user."""
+        from app.config.settings import settings
+        
         if user_id:
-            result = await sso_client.update_user(user_id=user_id, status="active")
+            app_codes = [settings.CLIENT_ID, settings.PM_APP_CODE]
+            result = await sso_client.assign_user_to_apps(user_id, app_codes)
             if not result.get("success"):
-                error_msg = result.get("error", "")
-                if "tidak ditemukan" in error_msg or "not found" in error_msg.lower():
-                    logger.warning(
-                        f"SSO user {user_id} not found during restore. "
-                        "The SSO account may have been permanently deleted. "
-                        "Restoring local user only."
-                    )
-                else:
-                    logger.warning(f"Failed to restore SSO user {user_id}: {error_msg}")
+                logger.warning(f"Failed to assign user {user_id} to apps: {result.get('error')}")
             else:
-                logger.info(f"SSO user {user_id} status restored to active")
+                logger.info(f"Assigned user {user_id} to apps {app_codes}")
 
             await user_commands.activate(user_id)
