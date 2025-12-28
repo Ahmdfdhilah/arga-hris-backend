@@ -60,7 +60,7 @@ def get_working_day_violation_reason(
         if employee_type != "on_site":
             return (
                 "Tidak bisa absen pada hari Minggu. "
-                "Hanya karyawan dengan tipe 'on_site' yang dapat absen di hari Minggu. "
+                "Hanya karyawan dengan tipe 'On Site' yang dapat absen di hari Minggu. "
                 "Hari kerja untuk tipe lainnya adalah Senin-Sabtu."
             )
     return "Hari ini adalah hari libur."

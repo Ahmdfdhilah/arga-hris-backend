@@ -30,17 +30,14 @@ class SSOSyncUtil:
 
         app_codes = [settings.CLIENT_ID, settings.PM_APP_CODE]
         
-        # First check if SSO user already exists by email
         existing_sso = await sso_client.get_user_by_email(email)
         sso_user = None
         
         if existing_sso:
-            # User exists, just assign to apps
             sso_user = existing_sso
             await sso_client.assign_user_to_apps(sso_user["id"], app_codes)
             logger.info(f"SSO user {email} already exists, assigned to apps")
         else:
-            # Create new SSO user
             create_result = await sso_client.create_user(
                 email=email,
                 name=name,
@@ -50,18 +47,11 @@ class SSOSyncUtil:
             )
             
             if not create_result.get("success"):
-                error_msg = create_result.get("error", "Unknown error")
-                # Check for specific constraint violations
-                if "phone" in error_msg and "unique" in error_msg.lower():
-                    raise ConflictException(f"Nomor telepon '{phone}' sudah digunakan oleh user lain")
-                elif "email" in error_msg and "unique" in error_msg.lower():
-                    raise ConflictException(f"Email '{email}' sudah digunakan")
-                else:
-                    raise ConflictException(f"Gagal membuat SSO user: {error_msg}")
+                error_msg = create_result.get("error", "Gagal membuat user")
+                raise ConflictException(error_msg)
             
             sso_user = create_result["user"]
 
-        # Sync to local user table
         local_user = await user_queries.get_by_email(email)
         if not local_user:
             new_user = User(
@@ -117,9 +107,7 @@ class SSOSyncUtil:
                         f"SSO user {user_id} not found, updating local user only"
                     )
                 else:
-                    raise ConflictException(
-                        f"Failed to update SSO user: {error_msg}"
-                    )
+                    raise ConflictException(error_msg or "Gagal memperbarui data user")
             else:
                 sso_user = sso_result.get("user", {})
 
