@@ -69,7 +69,6 @@ class CreateEmployeeUseCase:
             email=email,
             name=name,
             phone=phone,
-            gender=gender,
         )
 
         # 2. Auto-resolve supervisor if not provided but org_unit is

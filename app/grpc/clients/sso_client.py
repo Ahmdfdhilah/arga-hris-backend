@@ -84,12 +84,9 @@ class SSOUserGRPCClient(BaseGRPCClient):
         role: str = "user",
         phone: Optional[str] = None,
         password: Optional[str] = None,
-        alias: Optional[str] = None,
-        gender: Optional[str] = None,
-        address: Optional[str] = None,
-        bio: Optional[str] = None,
+        app_codes: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
-        """Create user in SSO."""
+        """Create user in SSO with optional app assignment."""
         try:
             stub = await self.get_stub()
             request = user_pb2.CreateUserRequest(
@@ -98,10 +95,7 @@ class SSOUserGRPCClient(BaseGRPCClient):
                 role=role,
                 phone=phone or "",
                 password=password or "",
-                alias=alias or "",
-                gender=gender or "",
-                address=address or "",
-                bio=bio or "",
+                app_codes=app_codes or [],
             )
             response = await stub.CreateUser(request)
             
@@ -122,10 +116,6 @@ class SSOUserGRPCClient(BaseGRPCClient):
         phone: Optional[str] = None,
         role: Optional[str] = None,
         status: Optional[str] = None,
-        alias: Optional[str] = None,
-        gender: Optional[str] = None,
-        address: Optional[str] = None,
-        bio: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Update user in SSO."""
         try:
@@ -137,10 +127,6 @@ class SSOUserGRPCClient(BaseGRPCClient):
                 phone=phone or "",
                 role=role or "",
                 status=status or "",
-                alias=alias or "",
-                gender=gender or "",
-                address=address or "",
-                bio=bio or "",
             )
             response = await stub.UpdateUser(request)
             

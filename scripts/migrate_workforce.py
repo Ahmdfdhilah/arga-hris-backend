@@ -10,9 +10,10 @@ Flow:
 3. Create users in SSO (with UUID)
 4. Assign HRIS application access
 5. Create replica users in HRIS
-6. Create org units in HRIS
-7. Create employees in HRIS (linked to users and org units)
-8. Update org unit heads (after employees are created)
+6. Create org units in HRIS (PRESERVE original IDs)
+7. Recalculate org unit paths using preserved IDs
+8. Create employees in HRIS (PRESERVE original IDs, linked to users and org units)
+9. Update org unit heads (after employees are created)
 
 Usage:
     python scripts/migrate_workforce.py
@@ -26,7 +27,7 @@ import sys
 import uuid
 import re
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
@@ -37,7 +38,7 @@ from sqlalchemy.orm import Session
 
 WORKFORCE_DUMP = Path(__file__).parent.parent / "sql" / "dump" / "arga_workforce.sql"
 SSO_DATABASE_URL = "postgresql://postgres:tanyafadil@localhost:5432/arga_sso_v2"
-HRIS_DATABASE_URL = "postgresql://postgres:tanyafadil@localhost:5432/hris"
+HRIS_DATABASE_URL = "postgresql://postgres:tanyafadil@localhost:5432/hris_2"
 HRIS_APP_CODE = "hris-arga"
 ADMIN_USER_ID = None
 
@@ -199,59 +200,84 @@ def create_hris_user(session: Session, sso_user_id: str, employee: Dict) -> str:
     return sso_user_id
 
 
+def calculate_path(org_unit_id: int, parent_id: Optional[int], parent_paths: Dict[int, str]) -> str:
+    """Calculate path for an org unit based on parent's path."""
+    if parent_id is None:
+        return str(org_unit_id)
+    
+    parent_path = parent_paths.get(parent_id, str(parent_id))
+    return f"{parent_path}.{org_unit_id}"
+
+
 def create_hris_org_units(
     session: Session, org_units: List[Dict], admin_id: str
 ) -> Dict[int, int]:
-    """Create org units in HRIS. Returns mapping of old_id -> new_id."""
+    """
+    Create org units in HRIS with PRESERVED original IDs.
+    Returns mapping of old_id -> new_id (same in this case).
+    """
     id_mapping = {}
+    paths = {}  # Store calculated paths
+    
+    # Sort by level to ensure parents are created first
     sorted_units = sorted(org_units, key=lambda x: int(x.get("org_unit_level", 0)))
 
+    # First pass: Create all org units with preserved IDs
     for unit in sorted_units:
-        old_id = int(unit.get("org_unit_id"))
+        original_id = int(unit.get("org_unit_id"))
         code = unit.get("org_unit_code")
         name = unit.get("org_unit_name")
         unit_type = unit.get("org_unit_type")
-        old_parent_id = unit.get("org_unit_parent_id")
+        parent_id = int(unit.get("org_unit_parent_id")) if unit.get("org_unit_parent_id") else None
         level = int(unit.get("org_unit_level", 1))
-        path = unit.get("org_unit_path")
         description = unit.get("org_unit_description")
         is_active = unit.get("is_active", "t") == "t"
 
-        parent_id = None
-        if old_parent_id:
-            parent_id = id_mapping.get(int(old_parent_id))
+        # Calculate proper path using the ORIGINAL ID (which we preserve)
+        path = calculate_path(original_id, parent_id, paths)
+        paths[original_id] = path
 
         result = session.execute(
             text("SELECT id FROM org_units WHERE code = :code"), {"code": code}
         ).fetchone()
 
         if result:
-            id_mapping[old_id] = result[0]
+            id_mapping[original_id] = result[0]
+            # Update path if already exists
+            session.execute(
+                text("UPDATE org_units SET path = :path WHERE id = :id"),
+                {"path": path, "id": result[0]}
+            )
             continue
 
+        # Insert with explicit ID to preserve original
         session.execute(
             text("""
-                INSERT INTO org_units (code, name, type, parent_id, level, path, description, is_active, created_by, created_at, updated_at)
-                VALUES (:code, :name, :type, :parent_id, :level, :path, :description, :is_active, :created_by, NOW(), NOW())
+                INSERT INTO org_units (id, code, name, type, parent_id, level, path, description, is_active, created_by, created_at, updated_at)
+                VALUES (:id, :code, :name, :type, :parent_id, :level, :path, :description, :is_active, :created_by, NOW(), NOW())
             """),
             {
+                "id": original_id,  # PRESERVE original ID
                 "code": code,
                 "name": name,
                 "type": unit_type,
-                "parent_id": parent_id,
+                "parent_id": parent_id,  # Use original parent_id directly
                 "level": level,
-                "path": path,
+                "path": path,  # Use calculated path
                 "description": description,
                 "is_active": is_active,
                 "created_by": admin_id,
             },
         )
 
-        result = session.execute(
-            text("SELECT id FROM org_units WHERE code = :code"), {"code": code}
-        ).fetchone()
+        id_mapping[original_id] = original_id
 
-        id_mapping[old_id] = result[0]
+    # Reset sequence to max ID + 1 to avoid conflicts for future inserts
+    max_id = max(id_mapping.values()) if id_mapping else 0
+    session.execute(
+        text(f"SELECT setval('org_units_id_seq', :max_id, true)"),
+        {"max_id": max_id}
+    )
 
     return id_mapping
 
@@ -259,108 +285,105 @@ def create_hris_org_units(
 def create_hris_employees(
     session: Session,
     employees: List[Dict],
-    user_id_mapping: Dict[int, str],
+    user_id_mapping: Dict[str, str],  # email -> sso_user_id
     org_unit_mapping: Dict[int, int],
     admin_id: str,
 ) -> Dict[int, int]:
-    """Create employees in HRIS. Returns mapping of old_id -> new_id."""
+    """
+    Create employees in HRIS with PRESERVED original IDs.
+    Uses two-pass approach to handle supervisor FK constraint.
+    Returns mapping of old_id -> new_id (same in this case).
+    """
     id_mapping = {}
+    supervisor_updates = []  # Store (employee_id, supervisor_id) for second pass
 
+    # PASS 1: Insert employees WITHOUT supervisor_id
     for emp in employees:
-        old_id = int(emp.get("employee_id"))
-        old_email = emp.get("employee_email")
+        original_id = int(emp.get("employee_id"))
+        email = emp.get("employee_email")
 
-        if not old_email:
+        if not email:
             continue
 
-        sso_user_id = user_id_mapping.get(old_email)
+        sso_user_id = user_id_mapping.get(email)
         if not sso_user_id:
             continue
 
-        code = emp.get("employee_number")  # Map employee_number to code
-        name = emp.get("employee_name")    # Denormalized name
-        email = old_email                   # Denormalized email
+        code = emp.get("employee_number")
+        name = emp.get("employee_name")
         position = emp.get("employee_position")
-        # Schema validation/mapping
         
-        # 1. Type Mapping (fulltime, contract, intern)
+        # Type Mapping
         emp_type_raw = str(emp.get("employee_type", "")).lower()
         if "pkwt" in emp_type_raw or "contract" in emp_type_raw:
             emp_type = "contract"
         elif "intern" in emp_type_raw or "magang" in emp_type_raw:
             emp_type = "intern"
-        elif "full" in emp_type_raw or "permanent" in emp_type_raw or "pkett" in emp_type_raw:
-            emp_type = "fulltime"
         else:
             emp_type = "fulltime"
 
-        # 2. Site Mapping (on_site, hybrid, ho)
-        # Assuming source might have 'site' or 'location'
+        # Site Mapping
         site_raw = str(emp.get("employee_type", "") or emp.get("employee_location", "")).lower()
         if "ho" in site_raw or "head" in site_raw:
             site = "ho"
         elif "hybrid" in site_raw:
             site = "hybrid"
-        elif "site" in site_raw or "lapangan" in site_raw:
-            site = "on_site"
         else:
             site = "on_site"
 
-        old_org_unit_id = emp.get("employee_org_unit_id")
+        org_unit_id = int(emp.get("employee_org_unit_id")) if emp.get("employee_org_unit_id") else None
+        supervisor_id = int(emp.get("employee_supervisor_id")) if emp.get("employee_supervisor_id") else None
         is_active = emp.get("is_active", "t") == "t"
-
-        org_unit_id = None
-        if old_org_unit_id:
-            org_unit_id = org_unit_mapping.get(int(old_org_unit_id))
 
         result = session.execute(
             text("SELECT id FROM employees WHERE code = :code"), {"code": code}
         ).fetchone()
 
         if result:
-            id_mapping[old_id] = result[0]
-            continue
+            id_mapping[original_id] = result[0]
+        else:
+            # Insert with explicit ID, WITHOUT supervisor_id
+            session.execute(
+                text("""
+                    INSERT INTO employees (id, user_id, name, email, code, position, type, site, org_unit_id, supervisor_id, is_active, created_by, created_at, updated_at)
+                    VALUES (:id, :user_id, :name, :email, :code, :position, :type, :site, :org_unit_id, NULL, :is_active, :created_by, NOW(), NOW())
+                """),
+                {
+                    "id": original_id,  # PRESERVE original ID
+                    "user_id": sso_user_id,
+                    "name": name,
+                    "email": email,
+                    "code": code,
+                    "position": position,
+                    "type": emp_type,
+                    "site": site,
+                    "org_unit_id": org_unit_id,
+                    "is_active": is_active,
+                    "created_by": admin_id,
+                },
+            )
+            id_mapping[original_id] = original_id
 
+        # Store supervisor update for second pass
+        if supervisor_id:
+            supervisor_updates.append((original_id, supervisor_id))
+
+    # Reset sequence to max ID + 1
+    max_id = max(id_mapping.values()) if id_mapping else 0
+    session.execute(
+        text(f"SELECT setval('employees_id_seq', :max_id, true)"),
+        {"max_id": max_id}
+    )
+
+    print(f"   - Employees created with preserved IDs: {len(id_mapping)}")
+
+    # PASS 2: Update supervisor_id now that all employees exist
+    print(f"   - Updating {len(supervisor_updates)} supervisor relationships...")
+    for emp_id, sup_id in supervisor_updates:
         session.execute(
-            text("""
-                INSERT INTO employees (user_id, name, email, code, position, type, site, org_unit_id, is_active, created_by, created_at, updated_at)
-                VALUES (:user_id, :name, :email, :code, :position, :type, :site, :org_unit_id, :is_active, :created_by, NOW(), NOW())
-            """),
-            {
-                "user_id": sso_user_id,
-                "name": name,
-                "email": email,
-                "code": code,
-                "position": position,
-                "type": emp_type,
-                "site": site,
-                "org_unit_id": org_unit_id,
-                "is_active": is_active,
-                "created_by": admin_id,
-            },
+            text("UPDATE employees SET supervisor_id = :sup_id WHERE id = :emp_id"),
+            {"sup_id": sup_id, "emp_id": emp_id}
         )
-
-        result = session.execute(
-            text("SELECT id FROM employees WHERE code = :code"), {"code": code}
-        ).fetchone()
-
-        id_mapping[old_id] = result[0]
-
-    for emp in employees:
-        old_id = int(emp.get("employee_id"))
-        old_supervisor_id = emp.get("employee_supervisor_id")
-
-        if old_supervisor_id and old_id in id_mapping:
-            new_id = id_mapping[old_id]
-            new_supervisor_id = id_mapping.get(int(old_supervisor_id))
-
-            if new_supervisor_id:
-                session.execute(
-                    text(
-                        "UPDATE employees SET supervisor_id = :supervisor_id WHERE id = :id"
-                    ),
-                    {"supervisor_id": new_supervisor_id, "id": new_id},
-                )
 
     return id_mapping
 
@@ -421,7 +444,7 @@ def assign_rbac_roles(session: Session, user_id_mapping: Dict[str, str]):
 
 
 def main():
-    print("Workforce Data Migration\n")
+    print("Workforce Data Migration (PRESERVING ORIGINAL IDs)\n")
 
     employees, org_units = load_workforce_data()
 
@@ -457,7 +480,7 @@ def main():
 
     print(f"Created {len(user_id_mapping)} SSO users\n")
 
-    print("Creating HRIS data...")
+    print("Creating HRIS data (preserving original IDs)...")
     with Session(hris_engine) as hris_session:
         for emp in employees:
             email = emp.get("employee_email")
@@ -467,11 +490,13 @@ def main():
 
         org_unit_mapping = create_hris_org_units(hris_session, org_units, ADMIN_USER_ID)
         hris_session.commit()
+        print(f"   - Org Units created with preserved IDs: {len(org_unit_mapping)}")
 
         employee_mapping = create_hris_employees(
             hris_session, employees, user_id_mapping, org_unit_mapping, ADMIN_USER_ID
         )
         hris_session.commit()
+        print(f"   - Employees created with preserved IDs: {len(employee_mapping)}")
 
         update_org_unit_heads(
             hris_session, org_units, org_unit_mapping, employee_mapping
@@ -483,9 +508,10 @@ def main():
 
     print(f"\nMigration Complete!")
     print(f"   - SSO Users: {len(user_id_mapping)}")
-    print(f"   - Org Units: {len(org_unit_mapping)}")
-    print(f"   - Employees: {len(employee_mapping)}")
+    print(f"   - Org Units: {len(org_unit_mapping)} (IDs preserved)")
+    print(f"   - Employees: {len(employee_mapping)} (IDs preserved)")
     print(f"   - RBAC Roles: {roles_assigned}")
+    print(f"\nNote: org_unit_path now correctly uses the preserved org_unit_id values")
 
 
 if __name__ == "__main__":

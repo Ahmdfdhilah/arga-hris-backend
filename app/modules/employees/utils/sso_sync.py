@@ -21,18 +21,21 @@ class SSOSyncUtil:
         email: str,
         name: str,
         phone: Optional[str] = None,
-        gender: Optional[str] = None,
     ) -> User:
         """
-        Create SSO user (if not exists) and sync to local User table.
+        Create SSO user (if not exists), assign to apps, and sync to local User table.
         Returns the local User object.
         """
+        from app.config.settings import settings
+
+        app_codes = [settings.CLIENT_ID, settings.PM_APP_CODE]
+        
         create_result = await sso_client.create_user(
             email=email,
             name=name,
             phone=phone,
-            gender=gender,
             role="user",
+            app_codes=app_codes,
         )
 
         sso_user = None
@@ -49,7 +52,6 @@ class SSOSyncUtil:
 
         local_user = await user_queries.get_by_email(email)
         if not local_user:
-            # Create new user model object
             new_user = User(
                 id=sso_user["id"],
                 email=sso_user["email"],
@@ -98,7 +100,6 @@ class SSOSyncUtil:
             )
             if not sso_result.get("success"):
                 error_msg = sso_result.get("error", "")
-                # If SSO user not found, log warning and update local only
                 if "tidak ditemukan" in error_msg or "not found" in error_msg.lower():
                     logger.warning(
                         f"SSO user {user_id} not found, updating local user only"
@@ -110,7 +111,6 @@ class SSOSyncUtil:
             else:
                 sso_user = sso_result.get("user", {})
 
-                # Update user model object directly
                 local_user.synced_at = datetime.utcnow()
                 if "email" in sso_update_fields:
                     local_user.email = sso_user.get(
@@ -133,7 +133,6 @@ class SSOSyncUtil:
             if not result.get("success"):
                 logger.warning(f"Failed to delete SSO user {user_id}: {result.get('error')}")
 
-            # Deactivate locally
             await user_commands.deactivate(user_id)
 
     @staticmethod
@@ -149,7 +148,6 @@ class SSOSyncUtil:
             result = await sso_client.update_user(user_id=user_id, status="active")
             if not result.get("success"):
                 error_msg = result.get("error", "")
-                # Check if user not found in SSO
                 if "tidak ditemukan" in error_msg or "not found" in error_msg.lower():
                     logger.warning(
                         f"SSO user {user_id} not found during restore. "
@@ -161,5 +159,4 @@ class SSOSyncUtil:
             else:
                 logger.info(f"SSO user {user_id} status restored to active")
 
-            # Always reactivate locally
             await user_commands.activate(user_id)

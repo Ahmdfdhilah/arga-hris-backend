@@ -60,10 +60,8 @@ class UserUpdatedHandler(BaseEventHandler):
 
             await commands.sync_from_sso(
                 sso_id=str(event.entity_id),
-                name=event.data.get("name"),
                 email=event.data.get("email"),
                 phone=event.data.get("phone"),
-                gender=event.data.get("gender"),
                 avatar_path=event.data.get("avatar_path"),
             )
 

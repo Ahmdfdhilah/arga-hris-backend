@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     CLIENT_ID: str = Field(
         default="hris-arga", description="Application client_id for JWT verification"
     )
+    PM_APP_CODE: str = Field(
+        default="pm-arga", description="PM application code for auto-assigning employees"
+    )
 
     # gRPC Server Settings (HRIS as master for Employee/OrgUnit)
     GRPC_HOST: str = Field(default="0.0.0.0")

@@ -29,12 +29,6 @@ message User {
   string role = 7;
   google.protobuf.Timestamp created_at = 8;
   google.protobuf.Timestamp updated_at = 9;
-  // Extended profile fields
-  optional string alias = 10;
-  optional string gender = 11;
-  optional google.protobuf.Timestamp date_of_birth = 12;
-  optional string address = 13;
-  optional string bio = 14;
 }
 
 // Read request/response messages
@@ -70,12 +64,7 @@ message CreateUserRequest {
   optional string phone = 3;
   string role = 4;  // "user", "admin", "guest"
   optional string password = 5;  // If not provided, generates temporary password
-  // Profile fields
-  optional string alias = 6;
-  optional string gender = 7;
-  optional google.protobuf.Timestamp date_of_birth = 8;
-  optional string address = 9;
-  optional string bio = 10;
+  repeated string app_codes = 6;  // Application codes to auto-assign user to
 }
 
 message CreateUserResponse {
@@ -93,12 +82,6 @@ message UpdateUserRequest {
   optional string phone = 4;
   optional string role = 5;
   optional string status = 6;  // "active", "inactive"
-  // Profile fields
-  optional string alias = 7;
-  optional string gender = 8;
-  optional google.protobuf.Timestamp date_of_birth = 9;
-  optional string address = 10;
-  optional string bio = 11;
 }
 
 message UpdateUserResponse {
