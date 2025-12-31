@@ -5,6 +5,7 @@ Field mapping: org_unit_* -> * (remove prefix untuk simplicity)
 """
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
+from app.core.enums.org_unit import OrgUnitType
 
 
 class OrgUnitCreateRequest(BaseModel):
@@ -24,7 +25,7 @@ class OrgUnitCreateRequest(BaseModel):
     
     code: str = Field(..., min_length=1, max_length=50, description="Kode unit organisasi (harus unik)")
     name: str = Field(..., min_length=1, max_length=255, description="Nama unit organisasi")
-    type: str = Field(..., description="Tipe unit organisasi")
+    type: OrgUnitType = Field(..., description="Tipe unit organisasi")
     parent_id: Optional[int] = Field(None, gt=0, description="ID parent unit organisasi (opsional)")
     head_id: Optional[int] = Field(None, gt=0, description="ID kepala unit (employee ID)")
     description: Optional[str] = Field(None, description="Deskripsi unit organisasi")
@@ -34,7 +35,6 @@ class OrgUnitCreateRequest(BaseModel):
     def validate_code(cls, v):
         if not v or not v.strip():
             raise ValueError('Kode unit organisasi tidak boleh kosong')
-        # Code should be alphanumeric with dash/underscore
         if not v.replace('-', '').replace('_', '').isalnum():
             raise ValueError('Kode unit organisasi hanya boleh mengandung huruf, angka, dash, dan underscore')
         return v.strip().upper()
@@ -46,19 +46,12 @@ class OrgUnitCreateRequest(BaseModel):
             raise ValueError('Nama unit organisasi tidak boleh kosong')
         return v.strip()
     
-    @field_validator('type')
-    @classmethod
-    def validate_type(cls, v):
-        if not v or not v.strip():
-            raise ValueError('Tipe unit organisasi tidak boleh kosong')
-        return v.strip()
-    
     class Config:
         json_schema_extra = {
             "example": {
                 "code": "IT-DEV",
                 "name": "IT Development",
-                "type": "department",
+                "type": "Operasional",
                 "parent_id": 1,
                 "head_id": 10,
                 "description": "Departemen pengembangan teknologi informasi"
@@ -82,7 +75,7 @@ class OrgUnitUpdateRequest(BaseModel):
     """
     
     name: Optional[str] = Field(None, min_length=1, max_length=255, description="Nama unit organisasi")
-    type: Optional[str] = Field(None, description="Tipe unit organisasi")
+    type: Optional[OrgUnitType] = Field(None, description="Tipe unit organisasi")
     parent_id: Optional[int] = Field(None, gt=0, description="ID parent unit organisasi")
     head_id: Optional[int] = Field(None, description="ID kepala unit (employee ID, null untuk hapus)")
     description: Optional[str] = Field(None, description="Deskripsi unit organisasi")
@@ -94,15 +87,6 @@ class OrgUnitUpdateRequest(BaseModel):
         if v is not None:
             if not v.strip():
                 raise ValueError('Nama unit organisasi tidak boleh kosong')
-            return v.strip()
-        return v
-    
-    @field_validator('type')
-    @classmethod
-    def validate_type(cls, v):
-        if v is not None:
-            if not v.strip():
-                raise ValueError('Tipe unit organisasi tidak boleh kosong')
             return v.strip()
         return v
     
@@ -131,7 +115,7 @@ class OrgUnitBulkItem(BaseModel):
 
     code: str = Field(..., min_length=1, max_length=50, description="Kode unit organisasi (harus unik)")
     name: str = Field(..., min_length=1, max_length=255, description="Nama unit organisasi")
-    type: str = Field(..., description="Tipe unit organisasi")
+    type: OrgUnitType = Field(..., description="Tipe unit organisasi")
     parent_code: Optional[str] = Field(None, max_length=50, description="Kode parent unit organisasi (opsional)")
     head_email: Optional[str] = Field(None, description="Email kepala unit (akan di-resolve ke employee ID)")
     description: Optional[str] = Field(None, description="Deskripsi unit organisasi")
@@ -152,13 +136,6 @@ class OrgUnitBulkItem(BaseModel):
     def validate_name(cls, v):
         if not v or not v.strip():
             raise ValueError('Nama unit organisasi tidak boleh kosong')
-        return v.strip()
-
-    @field_validator('type')
-    @classmethod
-    def validate_type(cls, v):
-        if not v or not v.strip():
-            raise ValueError('Tipe unit organisasi tidak boleh kosong')
         return v.strip()
 
     @field_validator('parent_code')
