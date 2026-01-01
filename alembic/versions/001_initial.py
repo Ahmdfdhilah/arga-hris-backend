@@ -325,7 +325,11 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
+        sa.Column("updated_by", postgresql.UUID(as_uuid=True), nullable=True),
         sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint(
+            "employee_id", "attendance_date", name="uq_attendance_employee_date"
+        ),
     )
     op.create_index("ix_attendances_id", "attendances", ["id"])
     op.create_index("ix_attendances_employee_id", "attendances", ["employee_id"])
@@ -362,6 +366,7 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
+        sa.Column("updated_by", postgresql.UUID(as_uuid=True), nullable=True),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(
             ["replacement_employee_id"], ["employees.id"], ondelete="SET NULL"

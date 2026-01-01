@@ -25,7 +25,7 @@ class MarkPresentByIdUseCase:
     ) -> AttendanceResponse:
         from datetime import timezone
 
-        attendance = await self.queries.get(attendance_id)
+        attendance = await self.queries.get_by_id(attendance_id)
 
         if not attendance:
             raise NotFoundException(
