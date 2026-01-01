@@ -157,6 +157,7 @@ async def update_leave_request(
     result = await service.update_leave_request(
         leave_request_id=leave_request_id,
         request=request,
+        updated_by_user_id=current_user.id,
     )
     return create_success_response(
         message="Leave request berhasil diupdate",

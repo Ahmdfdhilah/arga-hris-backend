@@ -18,7 +18,8 @@ class MarkPresentByIdUseCase:
     async def execute(
         self,
         attendance_id: int,
-        current_user_employee_id: int,
+        current_user_employee_id: Optional[int],
+        updated_by: str,
         admin_name: str,
         notes: Optional[str] = None,
     ) -> AttendanceResponse:
@@ -69,6 +70,7 @@ class MarkPresentByIdUseCase:
         attendance.overtime_hours = overtime_hours
         attendance.check_in_notes = final_notes
         attendance.check_out_notes = final_notes
+        attendance.updated_by = updated_by
 
         updated_attendance = await self.commands.update(attendance)
 

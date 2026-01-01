@@ -93,6 +93,7 @@ class CheckOutUseCase:
         existing.check_out_location_name = location_name
         existing.work_hours = work_hours
         existing.overtime_hours = overtime_hours
+        existing.updated_by = employee.user_id
         attendance = await self.commands.update(existing)
 
         if not attendance:

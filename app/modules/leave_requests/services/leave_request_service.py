@@ -86,8 +86,11 @@ class LeaveRequestService:
         self,
         leave_request_id: int,
         request: LeaveRequestUpdateRequest,
+        updated_by_user_id: str,
     ) -> LeaveRequestResponse:
-        return await self.update_uc.execute(leave_request_id, request)
+        return await self.update_uc.execute(
+            leave_request_id, request, updated_by_user_id
+        )
 
     async def delete_leave_request(self, leave_request_id: int) -> None:
         await self.delete_uc.execute(leave_request_id)

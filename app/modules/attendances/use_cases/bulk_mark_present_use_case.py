@@ -64,6 +64,7 @@ class BulkMarkPresentUseCase:
                 if existing:
                     existing.status = "present"
                     existing.check_in_notes = request.notes
+                    existing.updated_by = created_by
                     await self.commands.update(existing)
                     updated_count += 1
                 else:

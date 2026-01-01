@@ -34,6 +34,7 @@ class LeaveRequest(Base, TimestampMixin):
     total_days: Mapped[int] = mapped_column(Integer, nullable=False)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     created_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    updated_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
 
     # Replacement/Acting - optional fields untuk penggantian sementara
     replacement_employee_id: Mapped[Optional[int]] = mapped_column(

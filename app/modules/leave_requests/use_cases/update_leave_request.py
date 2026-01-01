@@ -25,7 +25,10 @@ class UpdateLeaveRequestUseCase:
         self.employee_queries = employee_queries
 
     async def execute(
-        self, leave_request_id: int, request: LeaveRequestUpdateRequest
+        self,
+        leave_request_id: int,
+        request: LeaveRequestUpdateRequest,
+        updated_by_user_id: str,
     ) -> LeaveRequestResponse:
         leave_request = await self.queries.get_by_id(leave_request_id)
 
@@ -78,6 +81,8 @@ class UpdateLeaveRequestUseCase:
             leave_request.replacement_employee_id = update_data[
                 "replacement_employee_id"
             ]
+
+        leave_request.updated_by = updated_by_user_id
 
         updated = await self.commands.update(leave_request)
 

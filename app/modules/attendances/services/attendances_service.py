@@ -195,10 +195,11 @@ class AttendanceService:
     async def mark_present_by_id(
         self,
         attendance_id: int,
-        current_user_employee_id: int,
+        current_user_employee_id: Optional[int],
+        updated_by: str,
         admin_name: str,
         notes: Optional[str] = None,
     ) -> AttendanceResponse:
         return await self.mark_present_by_id_uc.execute(
-            attendance_id, current_user_employee_id, admin_name, notes
+            attendance_id, current_user_employee_id, updated_by, admin_name, notes
         )

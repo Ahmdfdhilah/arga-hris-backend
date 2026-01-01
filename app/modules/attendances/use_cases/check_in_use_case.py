@@ -86,6 +86,7 @@ class CheckInUseCase:
             existing.check_in_location_name = location_name
             existing.status = "present"
             existing.org_unit_id = org_unit_id
+            existing.updated_by = employee.user_id
             attendance = await self.commands.update(existing)
         else:
             from app.modules.attendances.models.attendances import Attendance
@@ -103,7 +104,7 @@ class CheckInUseCase:
                 check_in_latitude=request.latitude,
                 check_in_longitude=request.longitude,
                 check_in_location_name=location_name,
-                created_by=str(employee_id),
+                created_by=employee.user_id,
             )
             attendance = await self.commands.create(attendance)
 

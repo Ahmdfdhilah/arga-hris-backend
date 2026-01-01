@@ -48,6 +48,7 @@ class Attendance(Base, TimestampMixin):
     )
 
     created_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    updated_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
 
     # Check-in specific fields
     check_in_submitted_at: Mapped[Optional[DateTimeType]] = mapped_column(
