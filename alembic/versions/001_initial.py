@@ -51,10 +51,10 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        sa.Column("created_by", sa.String(36), nullable=True),
-        sa.Column("updated_by", sa.String(36), nullable=True),
+        sa.Column("created_by", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column("updated_by", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("deleted_by", sa.String(36), nullable=True),
+        sa.Column("deleted_by", postgresql.UUID(as_uuid=True), nullable=True),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(["parent_id"], ["org_units.id"], ondelete="SET NULL"),
     )
@@ -109,7 +109,7 @@ def upgrade() -> None:
     op.create_table(
         "employees",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("user_id", sa.String(36), nullable=True),
+        sa.Column("user_id", postgresql.UUID(as_uuid=True), nullable=True),
         # Denormalized fields from User for search/display
         sa.Column("name", sa.String(200), nullable=True),
         sa.Column("email", sa.String(255), nullable=True),
@@ -136,10 +136,10 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        sa.Column("created_by", sa.String(36), nullable=True),
-        sa.Column("updated_by", sa.String(36), nullable=True),
+        sa.Column("created_by", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column("updated_by", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("deleted_by", sa.String(36), nullable=True),
+        sa.Column("deleted_by", postgresql.UUID(as_uuid=True), nullable=True),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(["org_unit_id"], ["org_units.id"], ondelete="SET NULL"),
@@ -245,7 +245,7 @@ def upgrade() -> None:
     # =========================================
     op.create_table(
         "user_roles",
-        sa.Column("user_id", sa.String(36), nullable=False),
+        sa.Column("user_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("role_id", sa.Integer(), nullable=False),
         sa.Column(
             "created_at",
@@ -298,7 +298,7 @@ def upgrade() -> None:
         sa.Column("check_out_time", sa.DateTime(timezone=True), nullable=True),
         sa.Column("work_hours", sa.Numeric(5, 2), nullable=True),
         sa.Column("overtime_hours", sa.Numeric(5, 2), nullable=True),
-        sa.Column("created_by", sa.String(36), nullable=True),
+        sa.Column("created_by", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("check_in_submitted_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("check_in_submitted_ip", sa.String(50), nullable=True),
         sa.Column("check_in_notes", sa.Text(), nullable=True),
@@ -346,7 +346,7 @@ def upgrade() -> None:
         sa.Column("end_date", sa.Date(), nullable=False),
         sa.Column("total_days", sa.Integer(), nullable=False),
         sa.Column("reason", sa.Text(), nullable=False),
-        sa.Column("created_by", sa.String(36), nullable=True),
+        sa.Column("created_by", postgresql.UUID(as_uuid=True), nullable=True),
         # Replacement/Acting support
         sa.Column("replacement_employee_id", sa.Integer(), nullable=True),
         sa.Column("assignment_id", sa.Integer(), nullable=True),
@@ -401,7 +401,7 @@ def upgrade() -> None:
         ),
         sa.Column("status", sa.String(20), nullable=False, server_default="draft"),
         sa.Column("submitted_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_by", sa.String(36), nullable=True),
+        sa.Column("created_by", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -445,8 +445,8 @@ def upgrade() -> None:
         sa.Column("status", sa.String(20), nullable=False, server_default="pending"),
         sa.Column("leave_request_id", sa.Integer(), nullable=False),
         sa.Column("reason", sa.String(500), nullable=True),
-        sa.Column("created_by", sa.String(36), nullable=True),
-        sa.Column("updated_by", sa.String(36), nullable=True),
+        sa.Column("created_by", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column("updated_by", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),

@@ -221,6 +221,9 @@ def generate_sso_users_sql(employees: List[Dict]) -> tuple[str, Dict[str, str], 
         ""
     ]
     
+    # Use a fixed namespace for deterministic UUIDs
+    NAMESPACE_USER = uuid.UUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8') 
+    
     for emp in employees:
         email = emp.get("employee_email")
         if not email:
@@ -235,7 +238,8 @@ def generate_sso_users_sql(employees: List[Dict]) -> tuple[str, Dict[str, str], 
         if not phone or phone.strip() == "":
             phone = None
         
-        user_id = str(uuid.uuid4())
+        # Deterministic UUID based on email
+        user_id = str(uuid.uuid5(NAMESPACE_USER, email))
         user_mapping[email] = user_id
         employee_id_to_uuid[employee_id] = user_id  # IMPORTANT: map employee_id → user_id
         
@@ -485,8 +489,18 @@ def generate_org_unit_heads_sql(org_units: List[Dict], org_unit_mapping: Dict[in
 def generate_rbac_assignments_sql(user_mapping: Dict[str, str]) -> str:
     """Generate SQL for assigning employee role."""
     sql_lines = [
-        "-- Assign Employee Role to All Users",
+        "-- Seed Basic Roles and Assign Employee Role to All Users",
         "-- File: 08_hris_rbac_assignments.sql",
+        "",
+        "-- Ensure required roles exist",
+        "INSERT INTO roles (name, description, is_system, created_at, updated_at)",
+        "SELECT 'super_admin', 'Full system access', true, NOW(), NOW() WHERE NOT EXISTS (SELECT 1 FROM roles WHERE name = 'super_admin');",
+        "INSERT INTO roles (name, description, is_system, created_at, updated_at)",
+        "SELECT 'hr_admin', 'HR administrator with full HR access', true, NOW(), NOW() WHERE NOT EXISTS (SELECT 1 FROM roles WHERE name = 'hr_admin');",
+        "INSERT INTO roles (name, description, is_system, created_at, updated_at)",
+        "SELECT 'org_unit_head', 'Organization unit head - can approve subordinates', true, NOW(), NOW() WHERE NOT EXISTS (SELECT 1 FROM roles WHERE name = 'org_unit_head');",
+        "INSERT INTO roles (name, description, is_system, created_at, updated_at)",
+        "SELECT 'employee', 'Regular employee', true, NOW(), NOW() WHERE NOT EXISTS (SELECT 1 FROM roles WHERE name = 'employee');",
         ""
     ]
     
