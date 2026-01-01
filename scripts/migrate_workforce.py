@@ -221,8 +221,8 @@ def generate_sso_users_sql(employees: List[Dict]) -> tuple[str, Dict[str, str], 
         ""
     ]
     
-    # Use a fixed namespace for deterministic UUIDs
-    NAMESPACE_USER = uuid.UUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8') 
+    # Use standard DNS namespace for deterministic UUIDs
+    NAMESPACE_USER = uuid.NAMESPACE_DNS
     
     for emp in employees:
         email = emp.get("employee_email")
@@ -602,7 +602,8 @@ def main():
     print(f"Output directory: {OUTPUT_DIR}\n")
     
     # Generate UUIDs
-    hris_app_id = str(uuid.uuid4())
+    # Generate deterministic Application UUID
+    hris_app_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, HRIS_APP_CODE))
     
     print("Generating SQL files...")
     print("\n=== MASTER DATA ===")

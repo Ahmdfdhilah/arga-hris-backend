@@ -1,4 +1,6 @@
+import uuid
 from sqlalchemy import String, Integer, ForeignKey, DateTime, Boolean
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from typing import Optional, TYPE_CHECKING
 from datetime import datetime as DateTimeType
@@ -16,8 +18,8 @@ if TYPE_CHECKING:
 class UserRole(Base):
     __tablename__ = "user_roles"
 
-    user_id: Mapped[str] = mapped_column(
-        String(36),
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         primary_key=True,
         nullable=False,
@@ -32,7 +34,6 @@ class UserRole(Base):
         DateTime(timezone=True), default=get_utc_now, nullable=False
     )
 
-    # Temporary assignment support
     is_temporary: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     valid_until: Mapped[Optional[DateTimeType]] = mapped_column(
         DateTime(timezone=True), nullable=True

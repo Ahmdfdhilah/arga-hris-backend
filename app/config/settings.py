@@ -1,6 +1,6 @@
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List
+from typing import List, Optional
 from app.config.constants import FileUploadConstants
 
 
@@ -80,10 +80,10 @@ class Settings(BaseSettings):
         default=10.0, description="Timeout for Nominatim API requests in seconds"
     )
 
-    SUPER_ADMIN_EMAIL: str | None = None
-    SUPER_ADMIN_SSO_ID: str | None = None
-    SUPER_ADMIN_FIRST_NAME: str | None = None
-    SUPER_ADMIN_LAST_NAME: str | None = None
+    SUPER_ADMIN_EMAIL: Optional[str] = None
+    SUPER_ADMIN_SSO_ID: Optional[str] = None
+    SUPER_ADMIN_FIRST_NAME: Optional[str] = None
+    SUPER_ADMIN_LAST_NAME: Optional[str] = None
 
     CORS_ORIGINS: str = Field(...)
 

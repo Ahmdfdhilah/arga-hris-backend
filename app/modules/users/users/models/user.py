@@ -10,7 +10,9 @@ Stores user profile data synced from SSO Master:
 Employee relationship links employment data to user profile.
 """
 
+import uuid
 from sqlalchemy import String, Boolean, DateTime, func
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import Optional, TYPE_CHECKING
 from datetime import datetime
@@ -27,7 +29,7 @@ class User(Base, TimestampMixin):
     __tablename__ = "users"
 
     # SSO UUID as primary key
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, nullable=False)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, nullable=False)
     
     # Profile data (synced from SSO)
     name: Mapped[str] = mapped_column(String(255), nullable=False)

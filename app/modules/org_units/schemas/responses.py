@@ -1,7 +1,4 @@
-"""
-Response schemas untuk OrgUnit operations
-"""
-
+import uuid
 from pydantic import BaseModel
 from typing import Optional, Dict, List
 from datetime import datetime
@@ -60,10 +57,10 @@ class OrgUnitResponse(BaseModel):
     is_active: bool = True
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
-    created_by: Optional[str] = None
-    updated_by: Optional[str] = None
+    created_by: Optional[uuid.UUID] = None
+    updated_by: Optional[uuid.UUID] = None
     deleted_at: Optional[datetime] = None
-    deleted_by: Optional[str] = None
+    deleted_by: Optional[uuid.UUID] = None
  
     parent: Optional[OrgUnitParentNestedResponse] = None
     head: Optional[OrgUnitHeadNestedResponse] = None

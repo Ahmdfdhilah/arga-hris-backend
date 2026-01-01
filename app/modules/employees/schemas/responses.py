@@ -1,7 +1,4 @@
-"""
-Employee Response Schemas
-"""
-
+import uuid
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
@@ -10,7 +7,7 @@ from datetime import datetime
 class UserNestedResponse(BaseModel):
     """User profile data (synced from SSO)"""
 
-    id: str  # SSO UUID
+    id: uuid.UUID  
     name: str
     email: Optional[str] = None
     phone: Optional[str] = None
@@ -51,7 +48,7 @@ class EmployeeResponse(BaseModel):
     """Employee with nested user profile"""
 
     id: int
-    user_id: Optional[str] = None
+    user_id: Optional[uuid.UUID] = None
     code: str
     name: Optional[str] = None  # Denormalized from user
     email: Optional[str] = None  # Denormalized from user
@@ -64,7 +61,7 @@ class EmployeeResponse(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     deleted_at: Optional[datetime] = None
-    deleted_by: Optional[str] = None
+    deleted_by: Optional[uuid.UUID] = None
 
     user: Optional[UserNestedResponse] = None
     org_unit: Optional[EmployeeOrgUnitNestedResponse] = None

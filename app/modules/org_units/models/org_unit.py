@@ -5,8 +5,9 @@ Represents organizational structure with hierarchical relationships.
 This is the master data, owned by HRIS.
 """
 
+import uuid
 from sqlalchemy import String, Integer, Boolean, Text, ForeignKey, Index, DateTime
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import Optional, List, TYPE_CHECKING
 from datetime import datetime
@@ -53,11 +54,11 @@ class OrgUnit(Base, TimestampMixin):
         Boolean, default=True, nullable=False, index=True
     )
 
-    # Audit fields for soft delete - UUID strings
-    created_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
-    updated_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    # Audit fields for soft delete - Native UUID
+    created_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    updated_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
-    deleted_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    deleted_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
 
     # Relationships
     parent: Mapped[Optional["OrgUnit"]] = relationship(

@@ -1,3 +1,4 @@
+import uuid
 from typing import Optional
 from datetime import date, datetime
 from pydantic import BaseModel
@@ -28,7 +29,7 @@ class LeaveRequestResponse(BaseModel):
     total_days: int
     reason: str
     replacement: Optional[ReplacementInfo] = None
-    created_by: Optional[str] = None
+    created_by: Optional[uuid.UUID] = None
     created_at: datetime
     updated_at: datetime
 

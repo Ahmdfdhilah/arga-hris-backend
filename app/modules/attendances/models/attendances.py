@@ -1,4 +1,6 @@
+import uuid
 from sqlalchemy import String, Integer, Date, DateTime, Text, Numeric
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from typing import Optional
 from datetime import date as DateType, datetime as DateTimeType
@@ -45,7 +47,7 @@ class Attendance(Base, TimestampMixin):
         comment="Overtime hours after 18:00 (e.g., 2.5 for 2 hours 30 minutes)",
     )
 
-    created_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    created_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
 
     # Check-in specific fields
     check_in_submitted_at: Mapped[Optional[DateTimeType]] = mapped_column(

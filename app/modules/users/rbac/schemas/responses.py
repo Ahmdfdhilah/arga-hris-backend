@@ -1,3 +1,4 @@
+import uuid
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
@@ -28,7 +29,7 @@ class PermissionResponse(BaseModel):
 
 
 class UserRolesPermissionsResponse(BaseModel):
-    user_id: str
+    user_id: uuid.UUID
     email: str
     full_name: str
     roles: List[str]
@@ -38,12 +39,12 @@ class UserRolesPermissionsResponse(BaseModel):
 class RoleAssignmentResponse(BaseModel):
     """Response untuk hasil assign/remove role"""
 
-    user_id: str
+    user_id: uuid.UUID
     role_name: str
 
 
 class MultipleRoleAssignmentResponse(BaseModel):
     """Response untuk hasil assign multiple roles"""
 
-    user_id: str
+    user_id: uuid.UUID
     roles: List[str]

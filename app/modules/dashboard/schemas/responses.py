@@ -1,6 +1,4 @@
-"""
-Dashboard response schemas
-"""
+import uuid
 from typing import List, Optional, Literal
 from pydantic import BaseModel, Field
 from datetime import date, datetime
@@ -106,7 +104,7 @@ class GuestWidget(BaseWidget):
 class DashboardSummary(BaseModel):
     """Complete dashboard summary for authenticated user with multiple roles"""
 
-    user_id: int
+    user_id: uuid.UUID
     full_name: str
     email: str
     roles: List[str] = Field(..., description="All roles assigned to user")

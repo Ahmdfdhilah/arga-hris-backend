@@ -1,10 +1,11 @@
+import uuid
 from pydantic import BaseModel, EmailStr
 from typing import Optional, Dict, Any
 from datetime import datetime
 
 
 class UserResponse(BaseModel):
-    id: str  # SSO UUID
+    id: uuid.UUID  # SSO UUID
     email: EmailStr
     first_name: str
     last_name: str
@@ -20,7 +21,7 @@ class UserResponse(BaseModel):
 
 
 class UserWithEmployeeResponse(BaseModel):
-    id: str  # SSO UUID
+    id: uuid.UUID  # SSO UUID
     email: EmailStr
     first_name: str
     last_name: str
@@ -34,7 +35,7 @@ class UserWithEmployeeResponse(BaseModel):
 
 
 class UserDetailResponse(BaseModel):
-    id: str  # SSO UUID
+    id: uuid.UUID  # SSO UUID
     email: EmailStr
     first_name: str
     last_name: str

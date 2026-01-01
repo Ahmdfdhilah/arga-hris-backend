@@ -5,7 +5,9 @@ Represents temporary employee assignments when someone takes leave.
 Link ke leave request untuk tracking.
 """
 
+import uuid
 from sqlalchemy import String, Integer, Date, ForeignKey, CheckConstraint, Index
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import Optional, TYPE_CHECKING
 from datetime import date as DateType
@@ -68,8 +70,8 @@ class EmployeeAssignment(Base, TimestampMixin):
     reason: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     # Audit fields
-    created_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
-    updated_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    created_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    updated_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
 
     # Relationships
     employee: Mapped["Employee"] = relationship(

@@ -5,6 +5,7 @@ Combines data from:
 - HRIS DB (employee_id, HRIS-specific roles)
 """
 
+import uuid
 from pydantic import BaseModel
 from typing import Optional, List
 
@@ -13,7 +14,7 @@ class CurrentUser(BaseModel):
     """Schema for authenticated user data."""
 
     # User identity (SSO UUID)
-    id: str  # SSO user UUID
+    id: uuid.UUID  # SSO user UUID
     employee_id: Optional[int] = None
     org_unit_id: Optional[int] = None
 

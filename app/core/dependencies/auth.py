@@ -38,14 +38,20 @@ async def get_current_user(
     try:
         payload = verify_token_locally(token)
 
-        user_id = payload.get("sub")
-        if not user_id:
+        import uuid
+        
+        user_id_str = payload.get("sub")
+        if not user_id_str:
             raise UnauthorizedException("Token missing user ID")
+        
+        try:
+            user_id = uuid.UUID(user_id_str)
+        except ValueError:
+            raise UnauthorizedException("Invalid user ID format in token")
         
         sso_name = payload.get("name")
         sso_role = payload.get("role", "user")
         sso_email = payload.get("email")
-        sso_avatar = payload.get("avatar_url")
 
         async with get_db_context() as db:
             user_queries = UserQueries(db)
@@ -65,7 +71,6 @@ async def get_current_user(
                     name=sso_name or "",
                     email=sso_email,
                     role=sso_role,
-                    avatar_url=sso_avatar,
                 )
                 user = await use_case.execute(dto)
                 await db.commit()
@@ -84,7 +89,6 @@ async def get_current_user(
                 org_unit_id=employee.org_unit_id if employee else None,
                 name=sso_name or "",
                 email=sso_email,
-                avatar_url=sso_avatar,
                 sso_role=sso_role,
                 roles=user_roles or [],
                 permissions=user_permissions or [],

@@ -1,7 +1,4 @@
-"""
-Response schemas untuk Employee Assignments module.
-"""
-
+import uuid
 from pydantic import BaseModel
 from typing import Optional
 from datetime import date, datetime
@@ -70,8 +67,8 @@ class AssignmentResponse(BaseModel):
     status: AssignmentStatus
     leave_request_id: int
     reason: Optional[str] = None
-    created_by: Optional[str] = None
-    updated_by: Optional[str] = None
+    created_by: Optional[uuid.UUID] = None
+    updated_by: Optional[uuid.UUID] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

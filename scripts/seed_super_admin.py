@@ -12,6 +12,7 @@ Environment Variables Required:
     - SUPER_ADMIN_LAST_NAME: Last name super admin
 """
 
+import uuid
 import sys
 import os
 from pathlib import Path
@@ -27,10 +28,10 @@ from app.config.settings import settings
 from app.modules.users.users.models.user import User
 from app.modules.users.rbac.models.role import Role
 from app.modules.users.rbac.models.user_role import UserRole
-from app.modules.employees.models.employee import Employee  # noqa: F401
-from app.modules.org_units.models.org_unit import OrgUnit  # noqa: F401
-from app.modules.leave_requests.models.leave_request import LeaveRequest  # noqa: F401
-from app.modules.employee_assignments.models.employee_assignment import (  # noqa: F401
+from app.modules.employees.models.employee import Employee
+from app.modules.org_units.models.org_unit import OrgUnit
+from app.modules.leave_requests.models.leave_request import LeaveRequest
+from app.modules.employee_assignments.models.employee_assignment import (
     EmployeeAssignment,
 )
 
@@ -41,7 +42,7 @@ def create_super_admin():
     """
     # Get super admin info from settings
     email = settings.SUPER_ADMIN_EMAIL
-    sso_id = settings.SUPER_ADMIN_SSO_ID
+    sso_id_str = settings.SUPER_ADMIN_SSO_ID
     first_name = settings.SUPER_ADMIN_FIRST_NAME or "Super"
     last_name = settings.SUPER_ADMIN_LAST_NAME or "Admin"
 
@@ -51,16 +52,16 @@ def create_super_admin():
         print("   Silakan set SUPER_ADMIN_EMAIL di file .env")
         return False
 
-    if not sso_id:
+    if not sso_id_str:
         print(" Error: SUPER_ADMIN_SSO_ID environment variable tidak ditemukan")
         print("   Silakan set SUPER_ADMIN_SSO_ID di file .env")
         return False
 
-    # Validasi sso_id simple (cek panjang string atau format uuid kalau perlu)
-    if len(str(sso_id)) < 30:
-        print(
-            f" Warning: SUPER_ADMIN_SSO_ID terlihat pendek ({sso_id}), pastikan ini UUID yang valid."
-        )
+    try:
+        sso_id = uuid.UUID(sso_id_str)
+    except ValueError:
+        print(f" Error: SUPER_ADMIN_SSO_ID ({sso_id_str}) bukan UUID yang valid")
+        return False
 
     # Create database engine and session (use sync database URL)
     database_url = settings.sync_database_url
@@ -69,12 +70,27 @@ def create_super_admin():
     with Session(engine) as session:
         try:
             # Check if super admin already exists
-            existing_user = session.query(User).filter(User.id == str(sso_id)).first()
+            existing_user = session.query(User).filter(User.id == sso_id).first()
 
             if existing_user:
                 print(f"⚠️  Super admin sudah ada:")
                 print(f"   - ID: {existing_user.id}")
-
+                
+                # Check for employee record
+                existing_employee = session.query(Employee).filter(Employee.user_id == sso_id).first()
+                if not existing_employee:
+                    print("📝 Membuat records employee untuk user yang ada...")
+                    new_employee = Employee(
+                        user_id=sso_id,
+                        code="ADMIN-001",
+                        name=existing_user.name,
+                        email=existing_user.email,
+                        is_active=True
+                    )
+                    session.add(new_employee)
+                    session.commit()
+                    print(" Employee record berhasil dibuat!")
+                
                 # Check if user has super_admin role
                 super_admin_role = (
                     session.query(Role).filter(Role.name == "super_admin").first()
@@ -125,12 +141,24 @@ def create_super_admin():
             print(f"   - Name: {first_name} {last_name}")
 
             new_user = User(
-                id=str(sso_id),  # SSO UUID as primary key
+                id=sso_id,  # SSO UUID as primary key
                 name=f"{first_name} {last_name}",
+                email=email,
                 is_active=True,
             )
             session.add(new_user)
-            session.flush()  # Get the user ID
+            session.flush()
+
+            # Create employee record
+            print("📝 Membuat record employee...")
+            new_employee = Employee(
+                user_id=sso_id,
+                code="ADMIN-001",
+                name=new_user.name,
+                email=email,
+                is_active=True
+            )
+            session.add(new_employee)
 
             # Assign super_admin role
             user_role = UserRole(user_id=new_user.id, role_id=super_admin_role.id)
