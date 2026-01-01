@@ -35,7 +35,6 @@ from app.modules.employee_assignments.models.employee_assignment import (
     EmployeeAssignment,
 )
 
-
 def create_super_admin():
     """
     Membuat super admin user berdasarkan environment variables.
@@ -48,19 +47,19 @@ def create_super_admin():
 
     # Validate required fields
     if not email:
-        print(" Error: SUPER_ADMIN_EMAIL environment variable tidak ditemukan")
+        print("❌ Error: SUPER_ADMIN_EMAIL environment variable tidak ditemukan")
         print("   Silakan set SUPER_ADMIN_EMAIL di file .env")
         return False
 
     if not sso_id_str:
-        print(" Error: SUPER_ADMIN_SSO_ID environment variable tidak ditemukan")
+        print("❌ Error: SUPER_ADMIN_SSO_ID environment variable tidak ditemukan")
         print("   Silakan set SUPER_ADMIN_SSO_ID di file .env")
         return False
 
     try:
         sso_id = uuid.UUID(sso_id_str)
     except ValueError:
-        print(f" Error: SUPER_ADMIN_SSO_ID ({sso_id_str}) bukan UUID yang valid")
+        print(f"❌ Error: SUPER_ADMIN_SSO_ID ({sso_id_str}) bukan UUID yang valid")
         return False
 
     # Create database engine and session (use sync database URL)
@@ -75,28 +74,15 @@ def create_super_admin():
             if existing_user:
                 print(f"⚠️  Super admin sudah ada:")
                 print(f"   - ID: {existing_user.id}")
-                
-                # Check for employee record
-                existing_employee = session.query(Employee).filter(Employee.user_id == sso_id).first()
-                if not existing_employee:
-                    print("📝 Membuat records employee untuk user yang ada...")
-                    new_employee = Employee(
-                        user_id=sso_id,
-                        code="ADMIN-001",
-                        name=existing_user.name,
-                        email=existing_user.email,
-                        is_active=True
-                    )
-                    session.add(new_employee)
-                    session.commit()
-                    print(" Employee record berhasil dibuat!")
+                print(f"   - Email: {existing_user.email}")
+                print(f"   - Name: {existing_user.name}")
                 
                 # Check if user has super_admin role
                 super_admin_role = (
                     session.query(Role).filter(Role.name == "super_admin").first()
                 )
                 if not super_admin_role:
-                    print(" Error: Role 'super_admin' tidak ditemukan di database")
+                    print("❌ Error: Role 'super_admin' tidak ditemukan di database")
                     print("   Pastikan migration RBAC sudah dijalankan")
                     return False
 
@@ -110,7 +96,7 @@ def create_super_admin():
                 )
 
                 if has_super_admin_role:
-                    print(" User sudah memiliki role super_admin")
+                    print("✅ User sudah memiliki role super_admin")
                     return True
                 else:
                     # Add super_admin role to existing user
@@ -120,7 +106,7 @@ def create_super_admin():
                     )
                     session.add(user_role)
                     session.commit()
-                    print(" Role super_admin berhasil ditambahkan!")
+                    print("✅ Role super_admin berhasil ditambahkan!")
                     return True
 
             # Get super_admin role
@@ -128,7 +114,7 @@ def create_super_admin():
                 session.query(Role).filter(Role.name == "super_admin").first()
             )
             if not super_admin_role:
-                print(" Error: Role 'super_admin' tidak ditemukan di database")
+                print("❌ Error: Role 'super_admin' tidak ditemukan di database")
                 print(
                     "   Pastikan migration RBAC sudah dijalankan (alembic upgrade head)"
                 )
@@ -147,18 +133,6 @@ def create_super_admin():
                 is_active=True,
             )
             session.add(new_user)
-            session.flush()
-
-            # Create employee record
-            print("📝 Membuat record employee...")
-            new_employee = Employee(
-                user_id=sso_id,
-                code="ADMIN-001",
-                name=new_user.name,
-                email=email,
-                is_active=True
-            )
-            session.add(new_employee)
 
             # Assign super_admin role
             user_role = UserRole(user_id=new_user.id, role_id=super_admin_role.id)
@@ -166,8 +140,9 @@ def create_super_admin():
 
             session.commit()
 
-            print(f"\n Super admin berhasil dibuat!")
+            print(f"\n✅ Super admin berhasil dibuat!")
             print(f"   - User ID: {new_user.id}")
+            print(f"   - Email: {email}")
             print(f"   - Role: super_admin")
             print(
                 f"\n💡 User ini sudah bisa login menggunakan SSO dengan email: {email}"
@@ -177,7 +152,7 @@ def create_super_admin():
 
         except Exception as e:
             session.rollback()
-            print(f"\n Error saat membuat super admin: {str(e)}")
+            print(f"\n❌ Error saat membuat super admin: {str(e)}")
             import traceback
 
             traceback.print_exc()

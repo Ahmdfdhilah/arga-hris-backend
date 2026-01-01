@@ -17,7 +17,7 @@ fi
 
 # Configuration
 SSO_DB="sso_stg"
-HRIS_DB=${POSTGRES_DB:-"hris_stg"}
+HRIS_DB=${POSTGRES_DB:-"hris_prod"}
 DB_USER=${POSTGRES_USER:-"postgres"}
 DB_HOST=${POSTGRES_SERVER:-"localhost"}
 DB_PORT=${POSTGRES_PORT:-"5432"}
