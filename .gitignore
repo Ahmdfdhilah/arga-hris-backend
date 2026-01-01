@@ -86,3 +86,8 @@ jwt_public.pem
 
 .claude
 CLAUDE.md
+
+# Ignore SQL dump files (contains sensitive data)
+sql/dump/
+sql/hris_tables_dump/
+migration_output
