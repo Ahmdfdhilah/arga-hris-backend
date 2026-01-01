@@ -365,7 +365,7 @@ async def bulk_mark_present(
     """
     data = await service.bulk_mark_present(
         request=request,
-        created_by=current_user.employee_id or current_user.id,
+        created_by=current_user.id,
     )
     return create_success_response(
         message=f"Bulk mark present berhasil. {data.created} attendance dibuat, {data.updated} attendance diupdate.",
@@ -405,7 +405,7 @@ async def mark_present_by_id(
     data = await service.mark_present_by_id(
         attendance_id=attendance_id,
         current_user_employee_id=current_employee_id,
-        admin_name=current_user.full_name,
+        admin_name=current_user.name,
         notes=request.notes,
     )
     return create_success_response(

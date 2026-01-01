@@ -1,3 +1,4 @@
+import uuid
 from app.modules.attendances.repositories import AttendanceQueries, AttendanceCommands
 from app.modules.employees.repositories import EmployeeQueries
 from app.modules.attendances.schemas import (
@@ -20,7 +21,7 @@ class BulkMarkPresentUseCase:
     async def execute(
         self,
         request: BulkMarkPresentRequest,
-        created_by: str,
+        created_by: "uuid.UUID",
     ) -> BulkMarkPresentSummary:
         # Get all active employees
         all_employees = []
@@ -43,15 +44,21 @@ class BulkMarkPresentUseCase:
                 break
             page += 1
 
+        employee_data_list = [
+            {"id": e.id, "org_unit_id": e.org_unit_id} for e in all_employees
+        ]
+
         created_count = 0
         updated_count = 0
         skipped_count = 0
 
-        for employee in all_employees:
+        for emp_data in employee_data_list:
+            emp_id = emp_data["id"]
+            org_id = emp_data["org_unit_id"]
             try:
                 # Check existing
                 existing = await self.queries.get_by_employee_and_date(
-                    employee.id, request.attendance_date
+                    emp_id, request.attendance_date
                 )
 
                 if existing:
@@ -63,8 +70,8 @@ class BulkMarkPresentUseCase:
                     from app.modules.attendances.models.attendances import Attendance
 
                     attendance = Attendance(
-                        employee_id=employee.id,
-                        org_unit_id=employee.org_unit_id,
+                        employee_id=emp_id,
+                        org_unit_id=org_id,
                         attendance_date=request.attendance_date,
                         status="present",
                         check_in_notes=request.notes,
@@ -73,7 +80,8 @@ class BulkMarkPresentUseCase:
                     await self.commands.create(attendance)
                     created_count += 1
             except Exception as e:
-                print(f"Error processing employee {employee.id}: {str(e)}")
+                await self.queries.db.rollback()
+                print(f"Error processing employee {emp_id}: {str(e)}")
                 skipped_count += 1
                 continue
 

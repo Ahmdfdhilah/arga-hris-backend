@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import String, Integer, Date, DateTime, Text, Numeric
+from sqlalchemy import String, Integer, Date, DateTime, Text, Numeric, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from typing import Optional
@@ -97,6 +97,12 @@ class Attendance(Base, TimestampMixin):
         String(500),
         nullable=True,
         comment="Check-out location address from reverse geocoding",
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "employee_id", "attendance_date", name="uq_attendance_employee_date"
+        ),
     )
 
     def __repr__(self) -> str:

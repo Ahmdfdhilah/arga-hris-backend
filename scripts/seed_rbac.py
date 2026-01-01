@@ -122,6 +122,12 @@ PERMISSIONS = [
         "action": "write",
     },
     {
+        "code": "attendance:update",
+        "description": "Update attendance admin only",
+        "resource": "attendance",
+        "action": "update",
+    },
+    {
         "code": "attendance:approve",
         "description": "Approve attendance corrections",
         "resource": "attendance",
@@ -289,6 +295,7 @@ ROLE_PERMISSIONS = {
         "employees:export",
         "attendance:read_all",
         "attendance:approve",
+        "attendance:update",
         "attendance:export",
         "leave:read_all",
         "leave:delete",

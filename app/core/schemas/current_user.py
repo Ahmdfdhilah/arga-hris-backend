@@ -29,6 +29,11 @@ class CurrentUser(BaseModel):
     permissions: List[str] = []  # HRIS permissions
 
     is_active: bool = True
+    
+    @property
+    def full_name(self) -> str:
+        """Alias for name for backward compatibility."""
+        return self.name
 
     class Config:
         from_attributes = True

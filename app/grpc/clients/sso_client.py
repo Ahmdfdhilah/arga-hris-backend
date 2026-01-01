@@ -22,7 +22,7 @@ class SSOUserGRPCClient(BaseGRPCClient):
         """Get user by ID from SSO."""
         try:
             stub = await self.get_stub()
-            request = user_pb2.GetUserRequest(user_id=user_id)
+            request = user_pb2.GetUserRequest(user_id=str(user_id))
             response = await stub.GetUser(request)
             
             if not response.found:
@@ -70,7 +70,7 @@ class SSOUserGRPCClient(BaseGRPCClient):
         """Batch get users by IDs from SSO."""
         try:
             stub = await self.get_stub()
-            request = user_pb2.BatchGetUsersRequest(user_ids=user_ids)
+            request = user_pb2.BatchGetUsersRequest(user_ids=[str(uid) for uid in user_ids])
             response = await stub.BatchGetUsers(request)
             
             return [user_proto_to_dict(user) for user in response.users]
@@ -121,7 +121,7 @@ class SSOUserGRPCClient(BaseGRPCClient):
         try:
             stub = await self.get_stub()
             request = user_pb2.UpdateUserRequest(
-                user_id=user_id,
+                user_id=str(user_id),
                 name=name or "",
                 email=email or "",
                 phone=phone or "",
@@ -145,7 +145,7 @@ class SSOUserGRPCClient(BaseGRPCClient):
         try:
             stub = await self.get_stub()
             request = user_pb2.RemoveUserFromAppsRequest(
-                user_id=user_id,
+                user_id=str(user_id),
                 app_codes=app_codes,
             )
             response = await stub.RemoveUserFromApps(request)
@@ -165,7 +165,7 @@ class SSOUserGRPCClient(BaseGRPCClient):
         try:
             stub = await self.get_stub()
             request = user_pb2.AssignUserToAppsRequest(
-                user_id=user_id,
+                user_id=str(user_id),
                 app_codes=app_codes,
             )
             response = await stub.AssignUserToApps(request)
@@ -309,7 +309,7 @@ class SSOAuthGRPCClient(BaseGRPCClient):
         try:
             stub = await self.get_stub()
             request = auth_pb2.LogoutRequest(
-                user_id=user_id,
+                user_id=str(user_id),
                 client_id=client_id or "",
                 device_id=device_id or "",
                 **{"global": global_logout},  # 'global' is a reserved keyword
@@ -328,7 +328,7 @@ class SSOAuthGRPCClient(BaseGRPCClient):
         """Get all sessions for user."""
         try:
             stub = await self.get_stub()
-            request = auth_pb2.GetSessionsRequest(user_id=user_id)
+            request = auth_pb2.GetSessionsRequest(user_id=str(user_id))
             response = await stub.GetSessions(request)
             
             sessions = []

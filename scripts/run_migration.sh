@@ -9,7 +9,10 @@ echo "=== HRIS Complete Migration Execution ==="
 
 # Load environment variables from .env if it exists
 if [ -f .env ]; then
-    export $(grep -v '^#' .env | xargs)
+    # Use allexport to export all variables from sourced file
+    set -a
+    source <(sed 's/\r$//' .env | grep -v '^[[:space:]]*#' | grep -v '^[[:space:]]*$')
+    set +a
 fi
 
 # Configuration
