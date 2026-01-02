@@ -13,6 +13,7 @@ from app.modules.attendances.routers import attendances
 from app.modules.leave_requests.routers import leave_requests
 from app.modules.scheduled_jobs.routers import scheduled_jobs
 from app.modules.dashboard.routers import dashboard
+from app.modules.holiday_calendar.routers import holidays
 from app.core.routers.system import router as system_router
 
 
@@ -35,6 +36,7 @@ def setup_routers(app: FastAPI) -> None:
         scheduled_jobs.router,
         dashboard.router,
         assignments.router,
+        holidays.router,
     ]
 
     for router in routers:

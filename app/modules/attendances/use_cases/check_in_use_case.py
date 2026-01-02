@@ -3,6 +3,7 @@ from fastapi import UploadFile, Request
 from app.modules.attendances.repositories import AttendanceQueries, AttendanceCommands
 from app.modules.employees.repositories import EmployeeQueries
 from app.modules.leave_requests.repositories import LeaveRequestQueries
+from app.modules.holiday_calendar.repositories import HolidayQueries
 from app.modules.attendances.schemas import CheckInRequest, AttendanceResponse
 from app.core.exceptions import ValidationException
 from app.core.utils.file_upload import upload_file_to_gcp, generate_signed_url_for_path
@@ -13,6 +14,7 @@ from app.core.utils.nominatim import nominatim_client
 from app.modules.attendances.utils.validators import (
     validate_working_day_and_employee_type,
     validate_not_on_leave,
+    validate_not_on_holiday,
 )
 
 
@@ -23,11 +25,13 @@ class CheckInUseCase:
         commands: AttendanceCommands,
         employee_queries: EmployeeQueries,
         leave_queries: LeaveRequestQueries,
+        holiday_queries: HolidayQueries,
     ):
         self.queries = queries
         self.commands = commands
         self.employee_queries = employee_queries
         self.leave_queries = leave_queries
+        self.holiday_queries = holiday_queries
 
     async def execute(
         self,
@@ -50,6 +54,7 @@ class CheckInUseCase:
 
         validate_working_day_and_employee_type(today, employee_type)
         await validate_not_on_leave(self.leave_queries, employee_id, today)
+        await validate_not_on_holiday(self.holiday_queries, today)
 
         existing = await self.queries.get_by_employee_and_date(employee_id, today)
         if existing and existing.check_in_time:

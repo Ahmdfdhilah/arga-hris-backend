@@ -2,6 +2,7 @@ from typing import Optional
 from datetime import date
 from app.core.exceptions import ValidationException
 from app.modules.leave_requests.repositories import LeaveRequestQueries
+from app.modules.holiday_calendar.repositories import HolidayQueries
 from app.core.utils.workforce import (
     is_working_day,
     get_working_day_violation_reason,
@@ -33,3 +34,18 @@ async def validate_not_on_leave(
             f"dari {leave_request.start_date.strftime('%d-%m-%Y')} "
             f"sampai {leave_request.end_date.strftime('%d-%m-%Y')}."
         )
+
+
+async def validate_not_on_holiday(
+    holiday_queries: HolidayQueries, check_date: date
+) -> None:
+    """
+    Validate if the given date is a national holiday.
+    Raises ValidationException if it is a holiday.
+    """
+    holiday = await holiday_queries.get_by_date(check_date)
+    if holiday and holiday.is_active:
+        raise ValidationException(
+            f"Tidak bisa absen karena hari ini adalah hari libur nasional: {holiday.name}"
+        )
+

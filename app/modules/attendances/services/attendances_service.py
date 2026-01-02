@@ -5,6 +5,7 @@ from fastapi import UploadFile, Request
 from app.modules.attendances.repositories import AttendanceQueries, AttendanceCommands
 from app.modules.employees.repositories import EmployeeQueries
 from app.modules.leave_requests.repositories import LeaveRequestQueries
+from app.modules.holiday_calendar.repositories import HolidayQueries
 from app.modules.attendances.schemas import (
     CheckInRequest,
     CheckOutRequest,
@@ -59,18 +60,20 @@ class AttendanceService:
         commands: AttendanceCommands,
         employee_queries: EmployeeQueries,
         leave_queries: LeaveRequestQueries,
+        holiday_queries: HolidayQueries,
     ):
         self.queries = queries
         self.commands = commands
         self.employee_queries = employee_queries
         self.leave_queries = leave_queries
+        self.holiday_queries = holiday_queries
 
         # Initialize Use Cases
         self.check_in_uc = CheckInUseCase(
-            queries, commands, employee_queries, leave_queries
+            queries, commands, employee_queries, leave_queries, holiday_queries
         )
         self.check_out_uc = CheckOutUseCase(
-            queries, commands, employee_queries, leave_queries
+            queries, commands, employee_queries, leave_queries, holiday_queries
         )
         self.get_my_attendance_uc = GetMyAttendanceUseCase(queries, employee_queries)
         self.get_team_attendance_uc = GetTeamAttendanceUseCase(

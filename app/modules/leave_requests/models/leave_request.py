@@ -27,7 +27,9 @@ class LeaveRequest(Base, TimestampMixin):
     __tablename__ = "leave_requests"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    employee_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    employee_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     leave_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     start_date: Mapped[DateType] = mapped_column(Date, nullable=False)
     end_date: Mapped[DateType] = mapped_column(Date, nullable=False)
@@ -51,6 +53,11 @@ class LeaveRequest(Base, TimestampMixin):
     )
 
     # Relationships
+    employee: Mapped[Optional["Employee"]] = relationship(
+        "Employee",
+        foreign_keys=[employee_id],
+        lazy="joined",
+    )
     replacement_employee: Mapped[Optional["Employee"]] = relationship(
         "Employee",
         foreign_keys=[replacement_employee_id],

@@ -278,6 +278,25 @@ PERMISSIONS = [
         "resource": "payroll",
         "action": "export",
     },
+    # Holidays
+    {
+        "code": "holiday:read",
+        "description": "View holidays",
+        "resource": "holiday",
+        "action": "read",
+    },
+    {
+        "code": "holiday:write",
+        "description": "Create/update holidays",
+        "resource": "holiday",
+        "action": "write",
+    },
+    {
+        "code": "holiday:delete",
+        "description": "Delete holidays",
+        "resource": "holiday",
+        "action": "delete",
+    },
 ]
 
 # Role-permission mappings
@@ -314,6 +333,9 @@ ROLE_PERMISSIONS = {
         "assignments:read",
         "assignments:cancel",
         "payroll:export",
+        "holiday:read",
+        "holiday:write",
+        "holiday:delete",
     ],
     "org_unit_head": [
         "employees:read",
@@ -329,6 +351,7 @@ ROLE_PERMISSIONS = {
         "org_units:read",
         "dashboard:read",
         "assignments:read",
+        "holiday:read",
     ],
     "employee": [
         "attendance:read",
@@ -338,6 +361,7 @@ ROLE_PERMISSIONS = {
         "work:read",
         "work:write",
         "dashboard:read",
+        "holiday:read",
     ],
 }
 

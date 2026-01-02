@@ -1,12 +1,16 @@
 import uuid
-from sqlalchemy import String, Integer, Date, DateTime, Text, Numeric, UniqueConstraint
+from sqlalchemy import String, Integer, Date, DateTime, Text, Numeric, UniqueConstraint, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
-from typing import Optional
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from typing import Optional, TYPE_CHECKING
 from datetime import date as DateType, datetime as DateTimeType
 from decimal import Decimal
 from app.config.database import Base
 from app.core.models.base_model import TimestampMixin
+
+if TYPE_CHECKING:
+    from app.modules.employees.models.employee import Employee
+    from app.modules.org_units.models.org_unit import OrgUnit
 
 
 class Attendance(Base, TimestampMixin):
@@ -22,9 +26,11 @@ class Attendance(Base, TimestampMixin):
     __tablename__ = "attendances"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    employee_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    employee_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     org_unit_id: Mapped[Optional[int]] = mapped_column(
-        Integer, nullable=True, index=True
+        Integer, ForeignKey("org_units.id", ondelete="SET NULL"), nullable=True, index=True
     )
     attendance_date: Mapped[DateType] = mapped_column(Date, nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="absent")
@@ -100,6 +106,14 @@ class Attendance(Base, TimestampMixin):
         comment="Check-out location address from reverse geocoding",
     )
 
+    # Relationships
+    employee: Mapped[Optional["Employee"]] = relationship(
+        "Employee", foreign_keys=[employee_id], lazy="joined"
+    )
+    org_unit: Mapped[Optional["OrgUnit"]] = relationship(
+        "OrgUnit", foreign_keys=[org_unit_id], lazy="joined"
+    )
+
     __table_args__ = (
         UniqueConstraint(
             "employee_id", "attendance_date", name="uq_attendance_employee_date"
@@ -108,3 +122,4 @@ class Attendance(Base, TimestampMixin):
 
     def __repr__(self) -> str:
         return f"<Attendance(id={self.id}, employee_id={self.employee_id}, date={self.attendance_date}, status={self.status})>"
+
