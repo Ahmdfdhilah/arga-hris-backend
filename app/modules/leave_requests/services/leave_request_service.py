@@ -1,6 +1,8 @@
 from typing import Optional, List, Tuple
 from datetime import date
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.modules.leave_requests.repositories import (
     LeaveRequestQueries,
     LeaveRequestCommands,
@@ -43,12 +45,14 @@ class LeaveRequestService:
 
     def __init__(
         self,
+        db: AsyncSession,
         queries: LeaveRequestQueries,
         commands: LeaveRequestCommands,
         employee_queries: EmployeeQueries,
         assignment_commands: AssignmentCommands,
         assignment_queries: AssignmentQueries,
     ):
+        self.db = db
         self.queries = queries
         self.commands = commands
         self.employee_queries = employee_queries
@@ -57,13 +61,13 @@ class LeaveRequestService:
 
         # Initialize Use Cases
         self.create_uc = CreateLeaveRequestUseCase(
-            queries, commands, employee_queries, assignment_commands, assignment_queries
+            db, queries, commands, employee_queries, assignment_commands, assignment_queries
         )
         self.get_uc = GetLeaveRequestUseCase(
             queries, employee_queries, assignment_queries
         )
-        self.update_uc = UpdateLeaveRequestUseCase(queries, commands, employee_queries)
-        self.delete_uc = DeleteLeaveRequestUseCase(queries, commands)
+        self.update_uc = UpdateLeaveRequestUseCase(db, queries, commands, employee_queries)
+        self.delete_uc = DeleteLeaveRequestUseCase(db, queries, commands)
         self.list_my_uc = ListMyLeaveRequestsUseCase(queries)
         self.list_all_uc = ListAllLeaveRequestsUseCase(
             queries, employee_queries, assignment_queries

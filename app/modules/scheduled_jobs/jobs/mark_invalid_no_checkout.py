@@ -39,7 +39,7 @@ class MarkInvalidNoCheckoutJob(BaseScheduledJob):
     description = (
         "Mark attendance status menjadi 'invalid' jika check-in tapi tidak checkout"
     )
-    cron = "27 13 * * *"  # Setiap hari jam 23:30 WIB
+    cron = "30 23 * * *"  # Setiap hari jam 23:30 WIB
     enabled = True
     max_retries = 3
 

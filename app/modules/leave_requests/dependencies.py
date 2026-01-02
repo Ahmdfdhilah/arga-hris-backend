@@ -59,6 +59,7 @@ AssignmentQueriesDep = Annotated[AssignmentQueries, Depends(get_assignment_queri
 
 
 def get_leave_request_service(
+    db: PostgresDB,
     queries: LeaveRequestQueriesDep,
     commands: LeaveRequestCommandsDep,
     employee_queries: EmployeeQueriesDep,
@@ -66,7 +67,7 @@ def get_leave_request_service(
     assignment_queries: AssignmentQueriesDep,
 ) -> LeaveRequestService:
     return LeaveRequestService(
-        queries, commands, employee_queries, assignment_commands, assignment_queries
+        db, queries, commands, employee_queries, assignment_commands, assignment_queries
     )
 
 

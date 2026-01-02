@@ -1,6 +1,8 @@
 from datetime import date
 from typing import Optional
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.modules.leave_requests.models.leave_request import LeaveRequest
 from app.modules.employee_assignments.models.employee_assignment import (
     EmployeeAssignment,
@@ -25,17 +27,20 @@ from app.modules.leave_requests.utils.total_days import (
     validate_leave_dates,
 )
 from app.core.utils.workforce import calculate_working_days
+from app.modules.attendances.utils.attendance_leave_sync import sync_attendances_to_leave
 
 
 class CreateLeaveRequestUseCase:
     def __init__(
         self,
+        db: AsyncSession,
         queries: LeaveRequestQueries,
         commands: LeaveRequestCommands,
         employee_queries: EmployeeQueries,
         assignment_commands: Optional[AssignmentCommands] = None,
         assignment_queries: Optional[AssignmentQueries] = None,
     ):
+        self.db = db
         self.queries = queries
         self.commands = commands
         self.employee_queries = employee_queries
@@ -130,6 +135,15 @@ class CreateLeaveRequestUseCase:
 
             created_leave.assignment_id = created_assignment.id
             await self.commands.update(created_leave)
+
+        # Sync attendance records to 'leave' status
+        await sync_attendances_to_leave(
+            db=self.db,
+            employee_id=request.employee_id,
+            start_date=request.start_date,
+            end_date=request.end_date,
+            org_unit_id=emp.org_unit_id,
+        )
             
         replacement_info = None
         if replacement_emp:

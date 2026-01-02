@@ -1,3 +1,5 @@
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.modules.leave_requests.schemas.requests import LeaveRequestUpdateRequest
 from app.modules.leave_requests.schemas.responses import LeaveRequestResponse
 from app.modules.leave_requests.repositories import (
@@ -11,15 +13,21 @@ from app.modules.leave_requests.utils.total_days import (
     validate_leave_dates,
 )
 from app.core.utils.workforce import calculate_working_days
+from app.modules.attendances.utils.attendance_leave_sync import (
+    sync_attendances_to_leave,
+    revert_attendances_from_leave,
+)
 
 
 class UpdateLeaveRequestUseCase:
     def __init__(
         self,
+        db: AsyncSession,
         queries: LeaveRequestQueries,
         commands: LeaveRequestCommands,
         employee_queries: EmployeeQueries,
     ):
+        self.db = db
         self.queries = queries
         self.commands = commands
         self.employee_queries = employee_queries
@@ -42,12 +50,26 @@ class UpdateLeaveRequestUseCase:
         if not update_data:
             raise BadRequestException("Tidak ada data yang akan diupdate")
 
+        # Store old dates for sync comparison
+        old_start_date = leave_request.start_date
+        old_end_date = leave_request.end_date
+
         new_start_date = update_data.get("start_date", leave_request.start_date)
         new_end_date = update_data.get("end_date", leave_request.end_date)
 
+        dates_changed = (
+            "start_date" in update_data or "end_date" in update_data
+        )
+
         validate_leave_dates(new_start_date, new_end_date)
 
-        if "start_date" in update_data or "end_date" in update_data:
+        emp = await self.employee_queries.get_by_id(leave_request.employee_id)
+        if not emp:
+            raise NotFoundException(
+                f"Employee {leave_request.employee_id} not found"
+            )
+
+        if dates_changed:
             await validate_no_overlapping_leave(
                 leave_queries=self.queries,
                 employee_id=leave_request.employee_id,
@@ -55,12 +77,6 @@ class UpdateLeaveRequestUseCase:
                 end_date=new_end_date,
                 exclude_leave_request_id=leave_request_id,
             )
-
-            emp = await self.employee_queries.get_by_id(leave_request.employee_id)
-            if not emp:
-                raise NotFoundException(
-                    f"Employee {leave_request.employee_id} not found"
-                )
 
             employee_type = emp.type
 
@@ -85,5 +101,23 @@ class UpdateLeaveRequestUseCase:
         leave_request.updated_by = updated_by_user_id
 
         updated = await self.commands.update(leave_request)
+
+        # Sync attendance records if dates changed
+        if dates_changed:
+            # Revert old date range first
+            await revert_attendances_from_leave(
+                db=self.db,
+                employee_id=leave_request.employee_id,
+                start_date=old_start_date,
+                end_date=old_end_date,
+            )
+            # Sync new date range to 'leave'
+            await sync_attendances_to_leave(
+                db=self.db,
+                employee_id=leave_request.employee_id,
+                start_date=new_start_date,
+                end_date=new_end_date,
+                org_unit_id=emp.org_unit_id,
+            )
 
         return LeaveRequestResponse.model_validate(updated)

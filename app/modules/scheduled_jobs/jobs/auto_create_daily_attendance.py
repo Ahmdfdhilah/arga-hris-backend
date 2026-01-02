@@ -42,7 +42,7 @@ class AutoCreateDailyAttendanceJob(BaseScheduledJob):
     description = (
         "Auto-create attendance records untuk semua karyawan aktif setiap hari"
     )
-    cron = "24 13 * * *"  # Setiap hari jam 23:00 WIB
+    cron = "0 23 * * *"  # Setiap hari jam 23:00 WIB
     enabled = True
     max_retries = 3
 
@@ -95,6 +95,10 @@ class AutoCreateDailyAttendanceJob(BaseScheduledJob):
                 attendance_queries = AttendanceQueries(db)
                 attendance_commands = AttendanceCommands(db)
                 employee_queries = EmployeeQueries(db)
+                
+                # Import and initialize leave request queries for checking leave
+                from app.modules.leave_requests.repositories import LeaveRequestQueries
+                leave_request_queries = LeaveRequestQueries(db)
 
                 # Get semua karyawan aktif dari local repository
                 all_employees = []
@@ -186,15 +190,25 @@ class AutoCreateDailyAttendanceJob(BaseScheduledJob):
                             skipped_count += 1
                             continue
 
-                        # Tentukan status berdasarkan employee_type
-                        # Hybrid employee: status "hybrid"
-                        # On_site dan employee lainnya: status "absent"
-                        if employee_type and employee_type.lower() == "hybrid":
+                        # Tentukan status berdasarkan employee_type atau leave
+                        # Cek apakah employee memiliki cuti pada hari ini
+                        leave_request = await leave_request_queries.is_on_leave(
+                            employee_id=employee_id,
+                            check_date=today,
+                        )
+                        
+                        if leave_request:
+                            attendance_status = "leave"
+                            logger.debug(
+                                f"Employee_id={employee_id} has leave request, "
+                                f"setting status='leave'"
+                            )
+                        elif employee_type and employee_type.lower() == "hybrid":
                             attendance_status = "hybrid"
                         else:
                             attendance_status = "absent"
 
-                        # Create attendance baru dengan status sesuai employee type
+                        # Create attendance baru dengan status sesuai
                         from app.modules.attendances.models.attendances import Attendance
                         
                         attendance = Attendance(
