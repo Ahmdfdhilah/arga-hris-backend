@@ -2,12 +2,21 @@
 import json
 import logging
 from typing import Any, Dict, Optional
+from uuid import UUID
 from aio_pika import Message, DeliveryMode
 
 from app.core.messaging.engine import message_engine
 from app.core.messaging.types import DomainEvent
 
 logger = logging.getLogger(__name__)
+
+
+class UUIDEncoder(json.JSONEncoder):
+    """Custom JSON encoder that handles UUID serialization."""
+    def default(self, obj):
+        if isinstance(obj, UUID):
+            return str(obj)
+        return super().default(obj)
 
 class EventPublisher:
     """
@@ -26,11 +35,10 @@ class EventPublisher:
             channel = await self.engine.get_channel()
             exchange = await channel.get_exchange(exchange_name)
             
-            # Ensure source service is set correctly
             event.source_service = self.service_name
             
             message = Message(
-                body=json.dumps(event.to_dict()).encode(),
+                body=json.dumps(event.to_dict(), cls=UUIDEncoder).encode(),
                 content_type="application/json",
                 delivery_mode=DeliveryMode.PERSISTENT,
                 correlation_id=event.correlation_id,
