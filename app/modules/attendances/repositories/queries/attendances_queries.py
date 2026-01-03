@@ -55,7 +55,7 @@ class AttendanceQueries:
 
         # Data query
         query = (
-            query.order_by(Attendance.attendance_date.desc()).offset(skip).limit(limit)
+            query.order_by(Attendance.check_in_time.desc().nulls_last()).offset(skip).limit(limit)
         )
         result = await self.db.execute(query)
         items = list(result.scalars().all())
@@ -85,7 +85,7 @@ class AttendanceQueries:
 
         # Data query
         query = (
-            query.order_by(Attendance.attendance_date.desc()).offset(skip).limit(limit)
+            query.order_by(Attendance.check_in_time.desc().nulls_last()).offset(skip).limit(limit)
         )
         result = await self.db.execute(query)
         items = list(result.scalars().all())
@@ -115,7 +115,7 @@ class AttendanceQueries:
 
         # Data query
         query = (
-            query.order_by(Attendance.attendance_date.desc()).offset(skip).limit(limit)
+            query.order_by(Attendance.check_in_time.desc().nulls_last()).offset(skip).limit(limit)
         )
         result = await self.db.execute(query)
         items = list(result.scalars().all())
@@ -150,7 +150,7 @@ class AttendanceQueries:
 
         # Data query
         query = (
-            query.order_by(Attendance.attendance_date.desc()).offset(skip).limit(limit)
+            query.order_by(Attendance.check_in_time.desc().nulls_last()).offset(skip).limit(limit)
         )
         result = await self.db.execute(query)
         items = list(result.scalars().all())
